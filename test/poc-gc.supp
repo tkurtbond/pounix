@@ -1,0 +1,37 @@
+# Valgrind suppressions for poc's conservative garbage collector.
+#
+# GarbageCollectedHeap.Collect scans every word of the machine stack for
+# things that look like heap pointers (poc's rtl/llvm/GarbageCollectedHeap.Mod:
+# each word goes to MarkCandidate), including words that were never
+# written. Memcheck reports each such read as an uninitialised-value error:
+# TestLiveness and TestStreams, which force collections, showed 20 and 24
+# of them, all "Conditional jump or move" with MarkCandidate as the top
+# frame (confirmed live, 2026-10-03). That is how a conservative collector
+# works, not a bug in the library. Copied from polibfyaml.
+#
+# Only uninitialised-value errors whose TOP frame is MarkCandidate are
+# suppressed; the same kinds of error anywhere else, and every invalid
+# read/write and leak, are still reported.
+
+{
+   poc-gc-markcandidate-cond
+   Memcheck:Cond
+   fun:GarbageCollectedHeap.MarkCandidate
+}
+{
+   poc-gc-markcandidate-value8
+   Memcheck:Value8
+   fun:GarbageCollectedHeap.MarkCandidate
+}
+
+# Not poc's: SSSD's NSS module (sssd-client 2.13.1 on Fedora 44), which
+# getpwnam loads when /etc/nsswitch.conf's "passwd:" names sss, calls
+# fstat(-1) to see whether its socket is open before it has opened one,
+# which valgrind's --track-fds=yes reports as a bad descriptor (pounix,
+# TestUsers, 2026-11-16). Only that call, from that function.
+{
+   sssd-client-fstat-unopened-socket
+   CoreError:FdBadUse
+   fun:fstat
+   fun:sss_cli_check_socket*
+}

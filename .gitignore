@@ -1,0 +1,3 @@
+# poc and clang output, test programs, valgrind logs, the tests' files: see
+# GNUmakefile
+/build/
