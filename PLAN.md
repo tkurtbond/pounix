@@ -415,9 +415,14 @@ taking `O_CLOEXEC` out changed nothing on Linux; clearing the flag
 after `fdopendir` made the check fail.
 
 [done on the BSD hosts 2026-11-17.] `gmake test` passed on FreeBSD,
-NetBSD and OpenBSD, amd64 and i386. OpenBSD's linker warns that
-`strcpy` "is almost always misused"; `resolve` used it before Phase 8,
-and `next_name` checks the length first, so both are left as they are.
+NetBSD and OpenBSD, amd64 and i386. OpenBSD's linker warned that
+`strcpy` "is almost always misused, please use strlcpy()", for
+`resolve` and `next_name`, each of which checked the length first.
+Both now use `strlcpy`, its result telling a name too long, which
+leaves the buffer empty as before: in POSIX since 2024, in glibc
+since 2.38 (declared without `-std=c99`; 2.43 here), and long in the
+BSDs. `make test` and `make valgrind` passed on Linux and `gmake test`
+on the five BSD hosts, with no warning (2026-11-17).
 
 ## Open questions
 

@@ -1,8 +1,9 @@
 /* UnixFiles.c -- the C part of module UnixFiles (pounix): a path
    resolved, files by descriptor, and the names in a directory. POSIX
    only (realpath, open, fstat, read, write, close, poll, clock_gettime,
-   fdopendir, readdir, closedir), the same on Linux and the BSDs. From pogemini's
-   GemFiles.c.
+   fdopendir, readdir, closedir; strlcpy, POSIX since 2024, which
+   OpenBSD's linker asks for over strcpy), the same on Linux and the
+   BSDs. From pogemini's GemFiles.c.
 
    Each function returns 0 or the errno value, never leaving it in
    errno for Oberon to fetch, and retries EINTR itself. Text crosses as
@@ -47,9 +48,10 @@ int32_t unixfiles_resolve(const char *path, char *out, length max)
 
 	if (realpath(path, real) == NULL)
 		return errno;
-	if ((length)strlen(real) >= max)
+	if (strlcpy(out, real, (size_t)max) >= (size_t)max) {
+		out[0] = '\0';
 		return ENAMETOOLONG;
-	strcpy(out, real);
+	}
 	return 0;
 }
 
@@ -201,9 +203,10 @@ int32_t unixfiles_next_name(intptr_t dir, char *name, length max)
 		if (strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0)
 			break;
 	}
-	if ((length)strlen(e->d_name) >= max)
+	if (strlcpy(name, e->d_name, (size_t)max) >= (size_t)max) {
+		name[0] = '\0';
 		return ENAMETOOLONG;
-	strcpy(name, e->d_name);
+	}
 	return 0;
 }
 
