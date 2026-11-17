@@ -21,16 +21,18 @@ compiler, doesn't give:
 It began with the C parts of pogemini, a Gemini server, so that later
 programs share them.
 
-**Status: early.** Phases 1 to 4 of [PLAN.md](PLAN.md) are done, on
-Linux: all four modules, tested, and checked under valgrind. The BSD
-port and `make install` are next. PLAN.md has the design and the
+**Status: early.** Phases 1 to 5 of [PLAN.md](PLAN.md) are done: all
+four modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked
+under valgrind on Linux. Checking `make install` by building the
+example outside the repo is next. PLAN.md has the design and the
 roadmap; [AGENTS.md](AGENTS.md) has the working notes.
 
 ## Requirements
 
 - poc 0.14.0.
-- Linux; FreeBSD, OpenBSD and NetBSD are planned (PLAN.md, Phase 5).
-- valgrind, for `make valgrind`.
+- Linux, FreeBSD, NetBSD or OpenBSD (amd64 and i386 tested on the
+  BSDs); GNU make, as `gmake` on the BSDs.
+- valgrind, for `make valgrind` (Linux).
 
 The library links nothing beyond the C library, so a program using it
 needs no extra flags.

@@ -25,14 +25,15 @@ applies here unchanged:
 
 ## Status
 
-As of 2026-11-16, Phases 1 to 4 of PLAN.md are done on Linux, each
-tested and valgrind-clean: `UnixErrors` (`Error`, the errno values a
+As of 2026-11-16, Phases 1 to 5 of PLAN.md are done: on Linux, each
+tested and valgrind-clean, and on FreeBSD, NetBSD and OpenBSD, amd64
+and i386, `gmake test` and `RootUsers` passing (Phase 5): `UnixErrors` (`Error`, the errno values a
 caller acts on), `UnixUsers` (`Root`, `Become`), `UnixFiles`
 (`Resolve`, `OpenRead`, `KindOf`, `Read`, `Write`, `Close`) and
 `UnixProcesses` (`Command`, `Start`, `Wait`, `Signal`, pipes), with
 `RootUsers` passing as root (`make test-root`, which the user runs
-here, since sudo asks for a password). Not yet: the BSD port (Phase
-5); README's example built from an installed copy (Phase 6).
+here, since sudo asks for a password). Not yet: README's example
+built from an installed copy (Phase 6).
 
 **poc 0.14.0** (`/usr/bin/poc`). pounix needs nothing beyond poc's
 runtime and libc.
@@ -76,9 +77,10 @@ FIFO). There is no string concatenation in poc: build texts with an
 `Append`. `RootUsers` is in `ROOTTESTS`: built by `make`, run only by
 `make test-root`.
 
-A check that something is close-on-exec runs a child that tests
-`/proc/self/fd/N` (Linux; skipped where there is no `/proc/self/fd`),
-with descriptor 0 as the control. A check worth having is checked
+A check that something is close-on-exec runs a child shell that
+redirects from it (`true 2>/dev/null <&N`, which fails if N isn't
+open), with descriptor 0 as the control: FreeBSD and OpenBSD have no
+`/proc/self/fd`. A check worth having is checked
 against a mutation once: the `SIGPIPE` check fails with the child's
 `signal(SIGPIPE, SIG_DFL)` taken out.
 
@@ -116,7 +118,9 @@ Each was confirmed by a program that ran, with poc 0.14.0 on Fedora 44
 - **`getpwnam` through SSSD calls `fstat(-1)`**, which valgrind's
   `--track-fds` reports as `FdBadUse`; suppressed in `poc-gc.supp`.
 - **A FIFO opened `O_RDONLY | O_NONBLOCK` with no writer** opens at
-  once, and `read` gives 0, the end, not `EAGAIN` (Linux).
+  once, and `read` gives 0, the end, not `EAGAIN`, on Linux, NetBSD and
+  OpenBSD; FreeBSD gives `EAGAIN` until a writer has opened it (Phase
+  5, all five BSD hosts).
 - **A non-blocking pipe with nothing in it** fails `read` with
   `EAGAIN`.
 - **sh can't change a signal ignored on entry**: `sh -c 'kill -PIPE
@@ -134,6 +138,10 @@ only after asking. Copy the working tree (`tar` less `build/` and
 `.git`) under `~/tmp`, run `gmake test`, judge by make's exit status
 and count `assertion failed` lines as well as `FAIL`, and remove it all
 when done. alerik has passwordless doas: `gmake test-root SUDO=doas`.
+On the others, where doas or sudo asks for a password, run
+`build/RootUsers` from `test/` in the user's root shells (tmux windows
+4 to 6), once `gmake test` has built it, so make never runs as root in
+the tree.
 
 ## Conventions
 

@@ -1,6 +1,6 @@
 MODULE TestFiles; (* UnixFiles, on files made under ../build/test *)
 
-IMPORT Out, Platform, UnixErrors, UnixFiles, Check;
+IMPORT Platform, UnixErrors, UnixFiles, Check;
 
 VAR
   err: UnixErrors.Error;
@@ -27,12 +27,14 @@ PROCEDURE Shell(cmd: ARRAY OF CHAR): BOOLEAN;
 BEGIN RETURN Platform.System(cmd) = 0
 END Shell;
 
-(* Whether a child process sees descriptor fd open, where /proc says. *)
+(* Whether a child process has descriptor fd open: the shell's
+   redirection from it fails if not, on Linux and the BSDs alike, which
+   don't all have /proc/self/fd. *)
 PROCEDURE ChildHas(fd: LONGINT): BOOLEAN;
   VAR cmd: ARRAY 64 OF CHAR; digits: ARRAY 24 OF CHAR; i, j: LONGINT;
 BEGIN
   i := 0; REPEAT digits[i] := CHR(ORD("0") + fd MOD 10); fd := fd DIV 10; INC(i) UNTIL fd = 0;
-  cmd := "test -e /proc/self/fd/"; j := 0; WHILE cmd[j] # 0X DO INC(j) END;
+  cmd := "true 2>/dev/null <&"; j := 0; WHILE cmd[j] # 0X DO INC(j) END;
   WHILE i > 0 DO DEC(i); cmd[j] := digits[i]; INC(j) END;
   cmd[j] := 0X;
   RETURN Shell(cmd)
@@ -69,11 +71,7 @@ BEGIN
   Check.Check(~UnixFiles.Write(fd, buf, 0, 1, n, err) & (err.code # 0)
     & EndsWith(err.text, "Bad file descriptor"),
     "Write: to a descriptor open for reading fails");
-  IF Shell("test -d /proc/self/fd") THEN
-    Check.Check(ChildHas(0) & ~ChildHas(fd), "OpenRead: close-on-exec, a child has 0 but not it")
-  ELSE
-    Out.String("skip - no /proc/self/fd, close-on-exec unchecked"); Out.Ln
-  END;
+  Check.Check(ChildHas(0) & ~ChildHas(fd), "OpenRead: close-on-exec, a child has 0 but not it");
   UnixFiles.Close(fd);
 
   Check.Check(~UnixFiles.OpenRead("../build/test/files/missing", {}, fd, err) & (fd = -1)
@@ -99,8 +97,11 @@ BEGIN
   Check.Check(UnixFiles.OpenRead("../build/test/files/fifo", {UnixFiles.nonBlocking}, fd, err)
     & UnixFiles.KindOf(fd, kind, err) & (kind = UnixFiles.other),
     "OpenRead nonBlocking, KindOf: a FIFO, other");
-  Check.Check(UnixFiles.Read(fd, buf, 0, LEN(buf), n, err) & (n = 0),
-    "Read: a FIFO no one has opened to write, 0");
+  (* the end at once, except on FreeBSD, which gives EAGAIN until a
+     writer has opened it *)
+  Check.Check(UnixFiles.Read(fd, buf, 0, LEN(buf), n, err) & (n = 0)
+    OR (err.code = UnixErrors.EAGAIN),
+    "Read: a FIFO no one has opened to write, 0 or EAGAIN");
   UnixFiles.Close(fd);
 
   Check.Check(UnixFiles.Write(1, buf, 0, 0, n, err) & (n = 0), "Write: nothing");

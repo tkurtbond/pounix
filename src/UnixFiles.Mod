@@ -15,7 +15,8 @@ CONST
   (* OpenRead's options *)
   nonBlocking* = 0;  (* O_NONBLOCK: a FIFO doesn't stop the open, nor
                         a read with nothing to give, which fails with
-                        EAGAIN *)
+                        EAGAIN; a FIFO no writer has yet opened gives
+                        the end, 0, except on FreeBSD, EAGAIN *)
   noFollow* = 1;     (* O_NOFOLLOW: a symbolic link as the last name
                         fails (ELOOP on Linux and FreeBSD, EMLINK on
                         NetBSD, EMLINK or ELOOP on OpenBSD) *)

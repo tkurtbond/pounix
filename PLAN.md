@@ -152,7 +152,9 @@ one of those, as "no such user" (to confirm on each system, Phase 2).
 - `Read(fd, VAR buf, pos, len, VAR n, VAR err): BOOLEAN`: up to `len`
   bytes into `buf[pos..]`; `n` 0 at the end. `Write(fd, buf, pos, len,
   VAR n, VAR err)`: up to `len` bytes, for a pipe to a child. A
-  non-blocking descriptor with nothing to give fails with `EAGAIN`.
+  non-blocking descriptor with nothing to give fails with `EAGAIN`. A
+  FIFO no writer has yet opened gives the end (0) on Linux, NetBSD and
+  OpenBSD, but `EAGAIN` on FreeBSD (Phase 5).
 - `Close(fd)`: closes, ignoring the result, since nothing pounix opens
   for writing can lose data in `close` (a pipe); `EINTR` isn't retried
   (the descriptor is gone on Linux and the BSDs either way).
@@ -286,7 +288,7 @@ signal ignored on entry, so it ends by `SIGPIPE` only if the child has
 it at its default; with the child's `signal(SIGPIPE, SIG_DFL)` taken
 out, the check fails. Arguments with spaces, quotes, `$`, `*` and the
 empty one arrive unchanged; a later child has none of an earlier one's
-pipes (where `/proc/self/fd` shows it). In the child, a pipe end or
+pipes (by a shell's redirection from the descriptor, since Phase 5). In the child, a pipe end or
 `/dev/null` on 0 to 2 (the caller's own closed) is first moved to 3 or
 above, so setting up the standard streams can't overwrite it. Under
 valgrind a child whose `exec` fails reports the parent's `argv` and
@@ -294,10 +296,28 @@ pipes as its own at `_exit`; `make valgrind` passes
 `--child-silent-after-fork=yes`. Halt tests: `HaltProcessesCommand`,
 `HaltProcessesWaited`, `HaltProcessesProcess`.
 
-### Phase 5: the BSD port
+### Phase 5: the BSD port [done]
 
 `gmake test` on alerik, artos, yishana, jherek and cymoril, and
 `RootUsers` as root where there is a root shell.
+
+[done 2026-11-16, poc 0.14.0: FreeBSD 15.1 amd64 (alerik), NetBSD 11.0
+amd64 (artos) and i386 (yishana), OpenBSD 7.9 amd64 (jherek) and i386
+(cymoril), each 53 checks and the six halt tests passing, and
+`RootUsers` as root on each (alerik by `gmake test-root SUDO=doas`, the
+others by `build/RootUsers` in a root shell).] The C parts needed no
+change. Two things in the tests did:
+
+- **A FIFO no writer has yet opened**, opened `O_NONBLOCK`, gives
+  `read` 0 on Linux, NetBSD and OpenBSD, but `EAGAIN` on FreeBSD; once
+  a writer has come and gone, 0 everywhere (C probe on all five).
+  `TestFiles` accepts either, and `UnixFiles.OpenRead`'s comment says
+  so.
+- **FreeBSD and OpenBSD have no `/proc/self/fd`**, so the close-on-exec
+  checks skipped there. They now ask a child shell to redirect from the
+  descriptor (`true 2>/dev/null <&N`), which fails if it isn't open, on
+  all six systems; with `O_CLOEXEC` taken out of `OpenRead` and
+  `pipe2`, both checks fail (Linux).
 
 ### Phase 6: documentation and install
 

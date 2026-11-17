@@ -1,6 +1,6 @@
 MODULE TestProcesses; (* UnixProcesses, running sh, cat, sleep and true *)
 
-IMPORT SYSTEM, Out, Platform, UnixErrors, UnixFiles, UnixProcesses, Check;
+IMPORT SYSTEM, Platform, UnixErrors, UnixFiles, UnixProcesses, Check;
 
 CONST
   (* SIGPIPE and SIG_IGN, the same on Linux and the BSDs: for this test
@@ -54,16 +54,18 @@ BEGIN
   RETURN c
 END Sh;
 
-(* Whether a child process sees descriptor fd open, where /proc says. *)
+(* Whether a child process has descriptor fd open: the shell's
+   redirection from it fails if not, on Linux and the BSDs alike, which
+   don't all have /proc/self/fd. *)
 PROCEDURE ChildHas(fd: LONGINT): BOOLEAN;
   VAR c: UnixProcesses.Command; r: UnixProcesses.Process; path: ARRAY 64 OF CHAR;
     digits: ARRAY 24 OF CHAR; i, j: LONGINT;
 BEGIN
   i := 0; REPEAT digits[i] := CHR(ORD("0") + fd MOD 10); fd := fd DIV 10; INC(i) UNTIL fd = 0;
-  path := "/proc/self/fd/"; j := 0; WHILE path[j] # 0X DO INC(j) END;
+  path := "true 2>/dev/null <&"; j := 0; WHILE path[j] # 0X DO INC(j) END;
   WHILE i > 0 DO DEC(i); path[j] := digits[i]; INC(j) END;
   path[j] := 0X;
-  c := UnixProcesses.NewCommand("test"); UnixProcesses.Add(c, "-e"); UnixProcesses.Add(c, path);
+  c := UnixProcesses.NewCommand("sh"); UnixProcesses.Add(c, "-c"); UnixProcesses.Add(c, path);
   RETURN Run(c, r) & r.exited & (r.status = 0)
 END ChildHas;
 
@@ -108,12 +110,8 @@ BEGIN
   Check.Check(UnixProcesses.Start(cmd, p, err) & (p.in >= 0) & (p.out >= 0) & (p.err = -1)
     & UnixFiles.Write(p.in, text, 0, 10, n, err) & (n = 10),
     "cat: write to its input");
-  IF Platform.System("test -d /proc/self/fd") = 0 THEN
-    Check.Check(ChildHas(0) & ~ChildHas(p.in) & ~ChildHas(p.out),
-      "a later child has none of an earlier one's pipes")
-  ELSE
-    Out.String("skip - no /proc/self/fd, pipes in a later child unchecked"); Out.Ln
-  END;
+  Check.Check(ChildHas(0) & ~ChildHas(p.in) & ~ChildHas(p.out),
+    "a later child has none of an earlier one's pipes");
   UnixProcesses.CloseInput(p);
   Check.Check((p.in = -1) & ReadAll(p.out, text) & (text = "hello, cat")
     & UnixProcesses.Wait(p, err) & p.exited & (p.status = 0),
