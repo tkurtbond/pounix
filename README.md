@@ -11,7 +11,8 @@ compiler, doesn't give:
 - `UnixFiles`: a path with its symbolic links resolved, and a file
   opened as a descriptor, non-blocking or refusing a link, for a
   program that waits on it through `Tasks` or hands it to another
-  library;
+  library, and, for a program without tasks, a wait with a time limit
+  for a descriptor to have something to read;
 - `UnixProcesses`: a program run as a child process with its
   arguments as a list (no shell, so no quoting), its standard streams
   inherited, `/dev/null` or pipes, and a program that can't be run
@@ -21,10 +22,11 @@ compiler, doesn't give:
 It began with the C parts of pogemini, a Gemini server, so that later
 programs share them.
 
-**Status: early.** Phases 1 to 6 of [PLAN.md](PLAN.md) are done: all
+**Status: early.** Phases 1 to 7 of [PLAN.md](PLAN.md) are done: all
 four modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked
 under valgrind on Linux, and `make install` checked by building the
-example below outside the repo; pogemini uses it. PLAN.md has the design and the
+example below outside the repo; pogemini uses it, and polibtls's
+tests. PLAN.md has the design and the
 roadmap; [AGENTS.md](AGENTS.md) has the working notes.
 
 ## Requirements

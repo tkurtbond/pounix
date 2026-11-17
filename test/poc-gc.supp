@@ -35,3 +35,14 @@
    fun:fstat
    fun:sss_cli_check_socket*
 }
+
+# TestProcesses checks that UnixFiles.WaitReadable fails for a
+# descriptor not open, by polling one it has just closed, which
+# --track-fds=yes reports as "closed already" (pounix, 2026-11-16). Only
+# poll, from WaitReadable's C part.
+{
+   pounix-waitreadable-closed-descriptor
+   CoreError:FdBadUse
+   fun:poll
+   fun:UnixFiles.-wait-readable
+}

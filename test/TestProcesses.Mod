@@ -13,8 +13,8 @@ VAR
   p, q: UnixProcesses.Process;
   text, expected: ARRAY 256 OF CHAR;
   quote, nl: ARRAY 2 OF CHAR;
-  n: LONGINT;
-  ok: BOOLEAN;
+  n, t0, fd: LONGINT;
+  ok, ready: BOOLEAN;
 
 PROCEDURE ["C", "signal"] CSignal(sig: SYSTEM.INT32; handler: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 
@@ -149,6 +149,31 @@ BEGIN
   UnixProcesses.CloseInput(p);
   Check.Check(UnixProcesses.Wait(p, err) & p.exited & (p.status = 0), "and cat ends");
   UnixProcesses.Close(p);
+
+  (* WaitReadable, on cat's output: nothing yet, then a line, then the
+     end, and a descriptor not open *)
+  cmd := UnixProcesses.NewCommand("cat");
+  UnixProcesses.SetInput(cmd, UnixProcesses.pipe); UnixProcesses.SetOutput(cmd, UnixProcesses.pipe);
+  ok := UnixProcesses.Start(cmd, p, err);
+  t0 := Platform.Time();
+  Check.Check(ok & UnixFiles.WaitReadable(p.out, 300, ready, err) & ~ready
+    & (Platform.Time() - t0 >= 290),
+    "WaitReadable: nothing to read, not ready after 300 ms");
+  text := "line"; Append(nl, text);
+  t0 := Platform.Time();
+  Check.Check(ok & UnixFiles.Write(p.in, text, 0, 5, n, err) & (n = 5)
+    & UnixFiles.WaitReadable(p.out, 10000, ready, err) & ready & (Platform.Time() - t0 < 5000)
+    & UnixFiles.Read(p.out, expected, 0, 5, n, err) & (n = 5),
+    "WaitReadable: ready once cat writes, without waiting out the time");
+  UnixProcesses.CloseInput(p);
+  Check.Check(ok & UnixFiles.WaitReadable(p.out, 10000, ready, err) & ready
+    & UnixFiles.Read(p.out, expected, 0, 5, n, err) & (n = 0),
+    "WaitReadable: ready at the end of the pipe, which reads 0");
+  fd := p.out;
+  Check.Check(ok & UnixProcesses.Wait(p, err) & p.exited & (p.status = 0), "and cat ends");
+  UnixProcesses.Close(p);
+  Check.Check(~UnixFiles.WaitReadable(fd, 0, ready, err) & (err.code # 0) & ~ready,
+    "WaitReadable: a descriptor not open fails");
 
   (* signals *)
   cmd := UnixProcesses.NewCommand("sleep"); UnixProcesses.Add(cmd, "30");

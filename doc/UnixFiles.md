@@ -72,6 +72,15 @@ PROCEDURE Write*(fd: LONGINT; VAR buf: ARRAY OF CHAR; pos, len: LONGINT;
 
 Writes up to len bytes from buf[pos..] to fd: n, how many, which may be fewer, as for a pipe whose reader is slow. Writing to a pipe no one reads raises SIGPIPE, which ends the program unless it is ignored (posockets' Sockets.IgnoreBrokenPipe); then it fails with EPIPE. Halts for a negative fd, or pos and len outside buf.
 
+#### WaitReadable
+
+```oberon
+PROCEDURE WaitReadable*(fd, ms: LONGINT; VAR ready: BOOLEAN;
+    VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Waits up to ms milliseconds for fd to have something to read: ready TRUE if it has, or is at its end, or has an error, any of which the next Read gives without waiting; FALSE if ms passed first. A signal doesn't cut the wait short. It waits in the kernel, so it stops every task too: a program running Tasks waits through Tasks.AwaitReadableFor instead. EBADF if fd isn't open. Halts for a negative fd or ms, or ms over 2^31 - 1.
+
 #### Close
 
 ```oberon

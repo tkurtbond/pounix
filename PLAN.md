@@ -340,6 +340,45 @@ pogemini moved to it the same day (pogemini's PLAN.md, "pounix"): its
 takes poDateTime's `Clocks`; its tests pass on Linux and all five BSD
 hosts.
 
+### Phase 7: `UnixFiles.WaitReadable`, and the test helpers [done]
+
+polibtls's `test/TestPeers.c` and pogemini's `test/Child.c` start a
+command as a child process in C of their own, the same code copied:
+`/bin/sh -c`, a pipe for its input and one for its output and error,
+its output read a line at a time while it runs, with a time limit, and
+to its end before it is waited for. `UnixProcesses` does all of it but
+the time limit, which needs `poll`.
+
+`UnixFiles.WaitReadable(fd, ms, VAR ready, VAR err)`: `poll` on one
+descriptor, `ready` for `POLLIN`, `POLLHUP` (some systems give it, not
+`POLLIN`, at the end of a pipe) or `POLLERR`, since each makes the next
+`Read` return at once; `EBADF` for `POLLNVAL`. `EINTR` is retried with
+the time left by `CLOCK_MONOTONIC`. It blocks the whole program, so a
+program running `Tasks` uses `Tasks.AwaitReadableFor` instead. No
+`WaitWritable` until a user needs one. Halt test `HaltFilesWait` (a
+negative time).
+
+[done on Linux 2026-11-16, valgrind-clean.] `TestProcesses` checks it
+on `cat`'s output: not ready after 300 ms with nothing written, ready
+at once after a line, ready at the end (which reads 0), and failing
+for a descriptor just closed. With `poll`'s time set to 0, the first
+fails. A C probe, with `SIGALRM` caught without `SA_RESTART` 200 ms
+into a 1000 ms wait, returned after 1000 ms; with the full time
+restarted after `EINTR`, after 1201 ms. Polling a closed descriptor is
+deliberate, so `poc-gc.supp` suppresses `--track-fds`'s report of it,
+for `poll` from `UnixFiles.-wait-readable` only.
+
+The test helpers: pogemini's `test/Child.c` and the child-process part
+of polibtls's `test/TestPeers.c` are gone, each replaced by a
+`test/Child.Mod` over `UnixProcesses` and `WaitReadable` (their
+PLAN.md's). Linux: pogemini's `make test` (299 checks) and polibtls's
+`make test` (460) and `make valgrind` pass. The BSDs: `gmake test`
+passes for pounix (59 checks), polibtls and pogemini on alerik,
+artos, yishana, jherek and cymoril, with poDateTime 5ae9a47 and
+posockets 08b6e48 from a `git archive`, no failure, no stray
+`assertion failed`, no core file, and only the usual skips (clients a
+host lacks, OpenSSL's openssl on OpenBSD, root).
+
 ## Open questions
 
 - Whether `UnixProcesses` should close every descriptor above 2 in the
@@ -347,5 +386,8 @@ hosts.
   for descriptors something else opened without close-on-exec. Not
   until a user finds one.
 - Whether a program running tasks wants a `Wait` that doesn't block
-  (`WNOHANG`, or `SIGCHLD` posting a `Tasks.Event`), and the tests a
-  `ReadLine` with a time limit (`TestPeers.ReadLine`). When a user asks.
+  (`WNOHANG`, or `SIGCHLD` posting a `Tasks.Event`). When a user asks:
+  the test helpers of Phase 7 don't, since each reads a child's output
+  to its end before waiting for it.
+- ~~The tests' `ReadLine` with a time limit (`TestPeers.ReadLine`)~~:
+  decided 2026-11-16, `UnixFiles.WaitReadable` (Phase 7).

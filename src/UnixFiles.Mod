@@ -36,6 +36,8 @@ PROCEDURE ["C", "UnixFiles.-read"] CRead(fd: SYSTEM.INT64; VAR buf: ARRAY OF CHA
   pos, len: SYSTEM.INT64; VAR n: SYSTEM.INT64): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-write"] CWrite(fd: SYSTEM.INT64; VAR buf: ARRAY OF CHAR;
   pos, len: SYSTEM.INT64; VAR n: SYSTEM.INT64): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-wait-readable"] CWaitReadable(fd: SYSTEM.INT64;
+  ms: SYSTEM.INT32; VAR ready: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-close"] CClose(fd: SYSTEM.INT64);
 
 (* Halts unless s holds a 0X, so C reads no further than s. *)
@@ -137,6 +139,24 @@ BEGIN
   n := SYSTEM.VAL(LONGINT, put);
   RETURN Outcome(r, "write", "", err)
 END Write;
+
+(* Waits up to ms milliseconds for fd to have something to read: ready
+   TRUE if it has, or is at its end, or has an error, any of which the
+   next Read gives without waiting; FALSE if ms passed first. A signal
+   doesn't cut the wait short. It waits in the kernel, so it stops
+   every task too: a program running Tasks waits through
+   Tasks.AwaitReadableFor instead. EBADF if fd isn't open. Halts for a
+   negative fd or ms, or ms over 2^31 - 1. *)
+PROCEDURE WaitReadable*(fd, ms: LONGINT; VAR ready: BOOLEAN;
+    VAR err: UnixErrors.Error): BOOLEAN;
+  VAR r, rd: SYSTEM.INT32;
+BEGIN
+  ASSERT(fd >= 0, AssertArgument);
+  ASSERT((ms >= 0) & (ms <= 7FFFFFFFH), AssertArgument);
+  rd := 0; r := CWaitReadable(fd, SYSTEM.VAL(SYSTEM.INT32, ms), rd);
+  ready := rd # 0;
+  RETURN Outcome(r, "poll", "", err)
+END WaitReadable;
 
 (* Closes fd. Its result is ignored: nothing UnixFiles opens for writing
    (a pipe) can lose data in close. Halts for a negative fd. *)
