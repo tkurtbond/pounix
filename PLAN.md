@@ -319,11 +319,26 @@ change. Two things in the tests did:
   all six systems; with `O_CLOEXEC` taken out of `OpenRead` and
   `pipe2`, both checks fail (Linux).
 
-### Phase 6: documentation and install
+### Phase 6: documentation and install [done]
 
 README.md, the reference (`make doc`), `make install`; then pogemini
 moves to pounix (in pogemini, its own plan), and `GemAccess`'s
 `Platform.GetTimeOfDay` to poDateTime's `Clocks` with it.
+
+The install is checked (2026-11-16, poc 0.14.0): `make install
+POCLIBDIR=<dir>` put the `OC` and `OC-g` variants under
+`<dir>/<triple>/`; README's example, cut out of README.md, built
+outside the repo with only `poc -OC -library-path <dir>`, linked pounix
+statically, gave the same hash as `sha256sum`, resolved a symbolic
+link, and reported a missing path ("No such file or directory"); `make
+uninstall` removed every file it had put there. pounix is installed in
+`~/.local/lib/poc`.
+
+pogemini moved to it the same day (pogemini's PLAN.md, "pounix"): its
+`GemUser` and `GemFiles.c` are gone, `GemCert` runs `/bin/sh` through
+`UnixProcesses` with its arguments as `$1` to `$3`, and `GemAccess`
+takes poDateTime's `Clocks`; its tests pass on Linux and all five BSD
+hosts.
 
 ## Open questions
 

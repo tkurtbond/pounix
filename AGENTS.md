@@ -25,15 +25,16 @@ applies here unchanged:
 
 ## Status
 
-As of 2026-11-16, Phases 1 to 5 of PLAN.md are done: on Linux, each
+As of 2026-11-16, Phases 1 to 6 of PLAN.md are done: on Linux, each
 tested and valgrind-clean, and on FreeBSD, NetBSD and OpenBSD, amd64
 and i386, `gmake test` and `RootUsers` passing (Phase 5): `UnixErrors` (`Error`, the errno values a
 caller acts on), `UnixUsers` (`Root`, `Become`), `UnixFiles`
 (`Resolve`, `OpenRead`, `KindOf`, `Read`, `Write`, `Close`) and
 `UnixProcesses` (`Command`, `Start`, `Wait`, `Signal`, pipes), with
 `RootUsers` passing as root (`make test-root`, which the user runs
-here, since sudo asks for a password). Not yet: README's example
-built from an installed copy (Phase 6).
+here, since sudo asks for a password). Phase 6: README's example
+built from an installed copy, and uninstall clean; pounix is installed
+in `~/.local/lib/poc`, and pogemini uses it (its PLAN.md, "pounix").
 
 **poc 0.14.0** (`/usr/bin/poc`). pounix needs nothing beyond poc's
 runtime and libc.

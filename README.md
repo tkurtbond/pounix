@@ -21,10 +21,10 @@ compiler, doesn't give:
 It began with the C parts of pogemini, a Gemini server, so that later
 programs share them.
 
-**Status: early.** Phases 1 to 5 of [PLAN.md](PLAN.md) are done: all
+**Status: early.** Phases 1 to 6 of [PLAN.md](PLAN.md) are done: all
 four modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked
-under valgrind on Linux. Checking `make install` by building the
-example outside the repo is next. PLAN.md has the design and the
+under valgrind on Linux, and `make install` checked by building the
+example below outside the repo; pogemini uses it. PLAN.md has the design and the
 roadmap; [AGENTS.md](AGENTS.md) has the working notes.
 
 ## Requirements
