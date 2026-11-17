@@ -1,8 +1,8 @@
-# UnixFiles: Paths resolved, and files by descriptor
+# UnixFiles: Paths resolved, files by descriptor, directories
 
 <!-- Made by doc/mkref.py from UnixFiles.Mod; edit the source, then make doc. -->
 
-What rtl's Files doesn't give: a path with its symbolic links resolved, and a file opened with the options a server needs, as a descriptor its caller reads, can wait on through Tasks, or hands to another library. A descriptor is a LONGINT, as in posockets and polibtls; whoever opened it closes it.
+What rtl's Files doesn't give: a path with its symbolic links resolved, and a file opened with the options a server needs, as a descriptor its caller reads, can wait on through Tasks, or hands to another library; and the names in a directory. A descriptor is a LONGINT, as in posockets and polibtls; whoever opened it closes it, and so with a Directory.
 
 Every descriptor UnixFiles opens is close-on-exec, so no child process inherits it (UnixProcesses, Platform.System).
 
@@ -25,6 +25,22 @@ regular* = 1; directory* = 2; other* = 3;
 ```
 
 KindOf's kinds
+
+```oberon
+NameLen* = 512;
+```
+
+Room enough for any name NextName gives, and its 0X: NetBSD's may be 511 bytes, the others' 255
+
+## Types
+
+```oberon
+Directory* = POINTER TO DirectoryDesc;
+DirectoryDesc = RECORD
+  handle: SYSTEM.ADDRESS  (* its DIR, 0 once closed *)
+```
+
+A directory open for reading its names (OpenDirectory)
 
 ## Procedures
 
@@ -88,3 +104,28 @@ PROCEDURE Close*(fd: LONGINT);
 ```
 
 Closes fd. Its result is ignored: nothing UnixFiles opens for writing (a pipe) can lose data in close. Halts for a negative fd.
+
+#### OpenDirectory
+
+```oberon
+PROCEDURE OpenDirectory*(path: ARRAY OF CHAR; options: SET; VAR d: Directory;
+    VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Opens the directory path for reading its names, with options, of which only noFollow counts: d, or FALSE, with err (ENOTDIR for anything not a directory), and d NIL. Its descriptor is close-on-exec. Close it with CloseDirectory.
+
+#### NextName
+
+```oberon
+PROCEDURE NextName*(d: Directory; VAR name: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+The next name in d, in the order the system keeps them, never "." or "..": "" at the end, and again after it. A name that doesn't fit in name fails with ENAMETOOLONG and is passed over; one of NameLen holds any. Any name, hidden ones too: what to show is the caller's to decide. Halts for d NIL or closed.
+
+#### CloseDirectory
+
+```oberon
+PROCEDURE CloseDirectory*(d: Directory);
+```
+
+Closes d and its descriptor; nothing if it is already closed. Halts for d NIL.

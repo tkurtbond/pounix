@@ -1,10 +1,11 @@
-MODULE UnixFiles; (* Paths resolved, and files by descriptor *)
+MODULE UnixFiles; (* Paths resolved, files by descriptor, directories *)
 
 (* What rtl's Files doesn't give: a path with its symbolic links
    resolved, and a file opened with the options a server needs, as a
    descriptor its caller reads, can wait on through Tasks, or hands to
-   another library. A descriptor is a LONGINT, as in posockets and
-   polibtls; whoever opened it closes it.
+   another library; and the names in a directory. A descriptor is a
+   LONGINT, as in posockets and polibtls; whoever opened it closes it,
+   and so with a Directory.
 
    Every descriptor UnixFiles opens is close-on-exec, so no child
    process inherits it (UnixProcesses, Platform.System). *)
@@ -24,7 +25,19 @@ CONST
   (* KindOf's kinds *)
   regular* = 1; directory* = 2; other* = 3;
 
+  (* Room enough for any name NextName gives, and its 0X: NetBSD's may
+     be 511 bytes, the others' 255 *)
+  NameLen* = 512;
+
   AssertArgument = 110;  (* PLAN.md, "Halt codes" *)
+  AssertDirectory = 114;
+
+TYPE
+  (* A directory open for reading its names (OpenDirectory) *)
+  Directory* = POINTER TO DirectoryDesc;
+  DirectoryDesc = RECORD
+    handle: SYSTEM.ADDRESS  (* its DIR, 0 once closed *)
+  END;
 
 PROCEDURE ["C", "UnixFiles.-resolve"] CResolve(path: ARRAY OF CHAR;
   VAR out: ARRAY OF CHAR; max: SYSTEM.INT64): SYSTEM.INT32;
@@ -39,6 +52,11 @@ PROCEDURE ["C", "UnixFiles.-write"] CWrite(fd: SYSTEM.INT64; VAR buf: ARRAY OF C
 PROCEDURE ["C", "UnixFiles.-wait-readable"] CWaitReadable(fd: SYSTEM.INT64;
   ms: SYSTEM.INT32; VAR ready: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-close"] CClose(fd: SYSTEM.INT64);
+PROCEDURE ["C", "UnixFiles.-open-directory"] COpenDirectory(path: ARRAY OF CHAR;
+  options: SYSTEM.INT32; VAR dir: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-next-name"] CNextName(dir: SYSTEM.ADDRESS;
+  VAR name: ARRAY OF CHAR; max: SYSTEM.INT64): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-close-directory"] CCloseDirectory(dir: SYSTEM.ADDRESS);
 
 (* Halts unless s holds a 0X, so C reads no further than s. *)
 PROCEDURE CheckString(VAR s: ARRAY OF CHAR);
@@ -165,5 +183,39 @@ BEGIN
   ASSERT(fd >= 0, AssertArgument);
   CClose(fd)
 END Close;
+
+(* Opens the directory path for reading its names, with options, of
+   which only noFollow counts: d, or FALSE, with err (ENOTDIR for
+   anything not a directory), and d NIL. Its descriptor is
+   close-on-exec. Close it with CloseDirectory. *)
+PROCEDURE OpenDirectory*(path: ARRAY OF CHAR; options: SET; VAR d: Directory;
+    VAR err: UnixErrors.Error): BOOLEAN;
+  VAR r, o: SYSTEM.INT32; h: SYSTEM.ADDRESS;
+BEGIN
+  CheckString(path);
+  o := 0; IF noFollow IN options THEN o := 2 END;
+  h := 0; r := COpenDirectory(path, o, h);
+  IF r = 0 THEN NEW(d); d.handle := h ELSE d := NIL END;
+  RETURN Outcome(r, "opendir", path, err)
+END OpenDirectory;
+
+(* The next name in d, in the order the system keeps them, never "."
+   or "..": "" at the end, and again after it. A name that doesn't fit
+   in name fails with ENAMETOOLONG and is passed over; one of NameLen
+   holds any. Any name, hidden ones too: what to show is the caller's
+   to decide. Halts for d NIL or closed. *)
+PROCEDURE NextName*(d: Directory; VAR name: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+BEGIN
+  ASSERT((d # NIL) & (d.handle # 0), AssertDirectory);
+  RETURN Outcome(CNextName(d.handle, name, LEN(name)), "readdir", "", err)
+END NextName;
+
+(* Closes d and its descriptor; nothing if it is already closed. Halts
+   for d NIL. *)
+PROCEDURE CloseDirectory*(d: Directory);
+BEGIN
+  ASSERT(d # NIL, AssertDirectory);
+  IF d.handle # 0 THEN CCloseDirectory(d.handle); d.handle := 0 END
+END CloseDirectory;
 
 END UnixFiles.

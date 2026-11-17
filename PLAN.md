@@ -155,6 +155,11 @@ one of those, as "no such user" (to confirm on each system, Phase 2).
   non-blocking descriptor with nothing to give fails with `EAGAIN`. A
   FIFO no writer has yet opened gives the end (0) on Linux, NetBSD and
   OpenBSD, but `EAGAIN` on FreeBSD (Phase 5).
+- `OpenDirectory(path, options, VAR d, VAR err)`, `NextName(d, VAR
+  name, VAR err)`, `CloseDirectory(d)` (Phase 8): a directory's names,
+  in the system's order, never `.` or `..`, hidden ones included;
+  `name` `""` at the end. A `Directory` hides its `DIR`; whoever opens
+  one closes it, as with a descriptor, and closing twice does nothing.
 - `Close(fd)`: closes, ignoring the result, since nothing pounix opens
   for writing can lose data in `close` (a pipe); `EINTR` isn't retried
   (the descriptor is gone on Linux and the BSDs either way).
@@ -222,6 +227,7 @@ with a `NULL`-free `PATH_MAX` buffer. Anything else goes behind an
 | 111 | `AssertCommand` | a `Command` that is `NIL` or has no program |
 | 112 | `AssertWaited` | `Wait` or `Signal` on a process already waited for |
 | 113 | `AssertProcess` | a `Process` that is `NIL` |
+| 114 | `AssertDirectory` | a `Directory` that is `NIL`, or closed for `NextName` |
 
 Each module declares the ones it uses, with the same value.
 
@@ -378,6 +384,40 @@ artos, yishana, jherek and cymoril, with poDateTime 5ae9a47 and
 posockets 08b6e48 from a `git archive`, no failure, no stray
 `assertion failed`, no core file, and only the usual skips (clients a
 host lacks, OpenSSL's openssl on OpenBSD, root).
+
+### Phase 8: a directory's names [done]
+
+pogemini lists a directory without `index.gmi`, when a capsule asks
+for it (its PLAN.md, "Directory listings"), and nothing in pounix or
+poc's runtime reads a directory: `Directories.NextFile` gives back its
+pattern on Unix, where the shell expands it.
+
+`OpenDirectory(path, options, VAR d, VAR err)` opens it `O_RDONLY |
+O_DIRECTORY | O_CLOEXEC`, with `O_NOFOLLOW` for `noFollow`, and hands
+the descriptor to `fdopendir`, so anything not a directory is `ENOTDIR`
+before it is opened for reading (a FIFO never waits for a writer).
+`NextName(d, VAR name, VAR err)`: `readdir`'s next name less `.` and
+`..`, `""` at the end (no real name is empty), told from an error by
+`errno` set to 0 before; a name too long for `name` is `ENAMETOOLONG`
+and passed over. `NameLen`, 512, holds any (NetBSD's `MAXNAMLEN` is
+511, the others' 255). `CloseDirectory(d)`: `closedir`, idempotent. No
+`d_type`: it may be `DT_UNKNOWN`, and a caller deciding what to show
+opens or resolves each name anyway. Halt code 114, `AssertDirectory`;
+halt test `HaltFilesDirectory`.
+
+[done on Linux 2026-11-17, valgrind-clean.] `TestFiles` checks every
+name, hidden too, and the end twice; `ENAMETOOLONG` passing names
+over; through a link, and `noFollow` refusing it; `ENOTDIR` for a file
+and a FIFO; `ENOENT`; an empty directory; close-on-exec, with the
+directory's descriptor the lowest free one; and that `CloseDirectory`
+frees it. glibc's `fdopendir` sets `FD_CLOEXEC` itself (a C probe), so
+taking `O_CLOEXEC` out changed nothing on Linux; clearing the flag
+after `fdopendir` made the check fail.
+
+[done on the BSD hosts 2026-11-17.] `gmake test` passed on FreeBSD,
+NetBSD and OpenBSD, amd64 and i386. OpenBSD's linker warns that
+`strcpy` "is almost always misused"; `resolve` used it before Phase 8,
+and `next_name` checks the length first, so both are left as they are.
 
 ## Open questions
 

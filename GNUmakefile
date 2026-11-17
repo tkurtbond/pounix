@@ -63,7 +63,7 @@ ROOTTESTS := RootUsers
 # Programs that must halt (test/<name>.Mod), as name:Assert-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
-HALTTESTS := HaltFilesRange:110 HaltFilesFd:110 HaltFilesString:110 HaltFilesWait:110 HaltProcessesCommand:111 HaltProcessesWaited:112 HaltProcessesProcess:113
+HALTTESTS := HaltFilesRange:110 HaltFilesFd:110 HaltFilesString:110 HaltFilesWait:110 HaltProcessesCommand:111 HaltProcessesWaited:112 HaltProcessesProcess:113 HaltFilesDirectory:114
 ASSERTSTATUS := 10
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)

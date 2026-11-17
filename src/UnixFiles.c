@@ -1,13 +1,14 @@
 /* UnixFiles.c -- the C part of module UnixFiles (pounix): a path
-   resolved, and files by descriptor. POSIX only (realpath, open, fstat,
-   read, write, close, poll, clock_gettime), the same on Linux and the
-   BSDs. From pogemini's
+   resolved, files by descriptor, and the names in a directory. POSIX
+   only (realpath, open, fstat, read, write, close, poll, clock_gettime,
+   fdopendir, readdir, closedir), the same on Linux and the BSDs. From pogemini's
    GemFiles.c.
 
    Each function returns 0 or the errno value, never leaving it in
    errno for Oberon to fetch, and retries EINTR itself. Text crosses as
    an address and a length (UnixErrors.c). Labelled UnixFiles.-<name>. */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -34,6 +35,9 @@ int32_t unixfiles_read(int64_t fd, char *buf, length pos, length len, int64_t *n
 int32_t unixfiles_write(int64_t fd, const char *buf, length pos, length len, int64_t *n) NAME("write");
 int32_t unixfiles_wait_readable(int64_t fd, int32_t ms, int32_t *ready) NAME("wait-readable");
 void unixfiles_close(int64_t fd) NAME("close");
+int32_t unixfiles_open_directory(const char *path, int32_t options, intptr_t *dir) NAME("open-directory");
+int32_t unixfiles_next_name(intptr_t dir, char *name, length max) NAME("next-name");
+void unixfiles_close_directory(intptr_t dir) NAME("close-directory");
 
 /* path with every symbolic link, "." and ".." resolved, into out, of
    max bytes: 0, or the errno value, ENAMETOOLONG if out is too short. */
@@ -152,4 +156,59 @@ int32_t unixfiles_wait_readable(int64_t fd, int32_t ms, int32_t *ready)
 void unixfiles_close(int64_t fd)
 {
 	close((int)fd);
+}
+
+/* Opens the directory path for reading its names, close-on-exec, as
+   *dir. O_DIRECTORY makes anything else ENOTDIR before fdopendir, so a
+   FIFO is never opened for reading; fdopendir then owns the descriptor,
+   and closedir closes it. */
+int32_t unixfiles_open_directory(const char *path, int32_t options, intptr_t *dir)
+{
+	int flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC, d, e;
+	DIR *p;
+
+	if (options & OPT_NOFOLLOW)
+		flags |= O_NOFOLLOW;
+	do
+		d = open(path, flags);
+	while (d < 0 && errno == EINTR);
+	if (d < 0)
+		return errno;
+	p = fdopendir(d);
+	if (p == NULL) {
+		e = errno;
+		close(d);
+		return e;
+	}
+	*dir = (intptr_t)p;
+	return 0;
+}
+
+/* The directory's next name, but "." and "..", into name, of max
+   bytes: "" at the end. ENAMETOOLONG if it doesn't fit, and that name
+   is passed over. readdir gives NULL both at the end and on an error,
+   which only errno tells apart. */
+int32_t unixfiles_next_name(intptr_t dir, char *name, length max)
+{
+	struct dirent *e;
+
+	name[0] = '\0';
+	for (;;) {
+		errno = 0;
+		e = readdir((DIR *)dir);
+		if (e == NULL)
+			return errno;
+		if (strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0)
+			break;
+	}
+	if ((length)strlen(e->d_name) >= max)
+		return ENAMETOOLONG;
+	strcpy(name, e->d_name);
+	return 0;
+}
+
+/* Closes the directory and its descriptor. */
+void unixfiles_close_directory(intptr_t dir)
+{
+	closedir((DIR *)dir);
 }

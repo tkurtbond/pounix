@@ -25,18 +25,20 @@ applies here unchanged:
 
 ## Status
 
-As of 2026-11-16, Phases 1 to 7 of PLAN.md are done: on Linux, each
+As of 2026-11-17, Phases 1 to 8 of PLAN.md are done: on Linux, each
 tested and valgrind-clean, and on FreeBSD, NetBSD and OpenBSD, amd64
 and i386, `gmake test` and `RootUsers` passing (Phase 5): `UnixErrors` (`Error`, the errno values a
 caller acts on), `UnixUsers` (`Root`, `Become`), `UnixFiles`
 (`Resolve`, `OpenRead`, `KindOf`, `Read`, `Write`, `WaitReadable`,
-`Close`) and `UnixProcesses` (`Command`, `Start`, `Wait`, `Signal`, pipes), with
+`Close`, `OpenDirectory`, `NextName`, `CloseDirectory`) and `UnixProcesses` (`Command`, `Start`, `Wait`, `Signal`, pipes), with
 `RootUsers` passing as root (`make test-root`, which the user runs
 here, since sudo asks for a password). Phase 6: README's example
 built from an installed copy, and uninstall clean; pounix is installed
 in `~/.local/lib/poc`, and pogemini uses it (its PLAN.md, "pounix").
 Phase 7: `UnixFiles.WaitReadable`, so the tests of polibtls and
-pogemini start their child processes through pounix.
+pogemini start their child processes through pounix. Phase 8: a
+directory's names (`OpenDirectory`, `NextName`, `CloseDirectory`), for
+pogemini's directory listings.
 
 **poc 0.14.0** (`/usr/bin/poc`). pounix needs nothing beyond poc's
 runtime and libc.
@@ -104,7 +106,9 @@ polling a closed descriptor on purpose (`WaitReadable`'s failure).
   then a check that root can't be had back).
 - `src/UnixFiles.Mod`/`.c`: `Resolve` (`realpath`), `OpenRead`
   (`nonBlocking`, `noFollow`; always `O_CLOEXEC`), `KindOf`, `Read`,
-  `Write`, `WaitReadable` (`poll`, one descriptor), `Close`.
+  `Write`, `WaitReadable` (`poll`, one descriptor), `Close`;
+  `OpenDirectory` (`O_DIRECTORY`, then `fdopendir`), `NextName`
+  (`readdir`, less `.` and `..`), `CloseDirectory`.
 - `src/UnixProcesses.Mod`/`.c`: `Command` (program and arguments as a
   list, streams `inherit`/`null`/`pipe`/`toOutput`), `Start` (fork and
   `execvp`, exec's errno back through a close-on-exec pipe), `Process`,
@@ -131,6 +135,9 @@ Each was confirmed by a program that ran, with poc 0.14.0 on Fedora 44
   $$'` survives if `SIGPIPE` was ignored when it started, and ends by
   it otherwise, which is how `TestProcesses` sees the child's
   disposition.
+- **glibc's `fdopendir` sets close-on-exec itself** (2026-11-17), so on
+  Linux `OpenDirectory`'s close-on-exec check passes without
+  `O_CLOEXEC`; it fails once the flag is cleared after `fdopendir`.
 - **valgrind follows a forked child until it execs**, writing its leak
   report to the same log; `--child-silent-after-fork=yes` stops that.
 

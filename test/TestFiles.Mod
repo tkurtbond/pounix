@@ -10,6 +10,7 @@ VAR
   fd, n: LONGINT;
   kind: INTEGER;
   ok: BOOLEAN;
+  d: UnixFiles.Directory;
 
 (* Whether s ends with tail. *)
 PROCEDURE EndsWith(s, tail: ARRAY OF CHAR): BOOLEAN;
@@ -39,6 +40,82 @@ BEGIN
   cmd[j] := 0X;
   RETURN Shell(cmd)
 END ChildHas;
+
+(* Reads every name in the directory path into seen, a bit per expected
+   name (a, b.txt, .hidden, sub), with name of size; others counts any
+   other name, tooLong the ENAMETOOLONGs; FALSE on any other failure. *)
+PROCEDURE ReadAll(path: ARRAY OF CHAR; size: INTEGER; VAR seen: SET;
+    VAR others, tooLong: INTEGER): BOOLEAN;
+  VAR name: ARRAY UnixFiles.NameLen OF CHAR; small: ARRAY 4 OF CHAR;
+    dir: UnixFiles.Directory; e: UnixErrors.Error; got: BOOLEAN;
+BEGIN
+  seen := {}; others := 0; tooLong := 0;
+  IF ~UnixFiles.OpenDirectory(path, {}, dir, e) THEN RETURN FALSE END;
+  LOOP
+    IF size = LEN(small) THEN got := UnixFiles.NextName(dir, small, e); COPY(small, name)
+    ELSE got := UnixFiles.NextName(dir, name, e)
+    END;
+    IF ~got THEN
+      IF e.code = UnixErrors.ENAMETOOLONG THEN INC(tooLong)
+      ELSE UnixFiles.CloseDirectory(dir); RETURN FALSE
+      END
+    ELSIF name = "" THEN EXIT
+    ELSIF name = "a" THEN INCL(seen, 0)
+    ELSIF name = "b.txt" THEN INCL(seen, 1)
+    ELSIF name = ".hidden" THEN INCL(seen, 2)
+    ELSIF name = "sub" THEN INCL(seen, 3)
+    ELSE INC(others)
+    END
+  END;
+  (* the end again *)
+  got := UnixFiles.NextName(dir, name, e) & (name = "");
+  UnixFiles.CloseDirectory(dir); UnixFiles.CloseDirectory(dir);
+  RETURN got
+END ReadAll;
+
+PROCEDURE Directories;
+  VAR seen: SET; others, tooLong: INTEGER; f: LONGINT; name: ARRAY UnixFiles.NameLen OF CHAR;
+BEGIN
+  ok := Shell("mkdir -p ../build/test/files/listing/sub && touch ../build/test/files/listing/a ../build/test/files/listing/b.txt ../build/test/files/listing/.hidden && ln -s listing ../build/test/files/dirlink");
+  Check.Check(ok, "make a directory to list");
+  Check.Check(ReadAll("../build/test/files/listing", UnixFiles.NameLen, seen, others, tooLong)
+    & (seen = {0..3}) & (others = 0) & (tooLong = 0),
+    "OpenDirectory, NextName: every name, hidden too, not . or .., then the end, again");
+  Check.Check(ReadAll("../build/test/files/listing", 4, seen, others, tooLong)
+    & (seen = {0, 3}) & (others = 0) & (tooLong = 2),
+    "NextName: a name too long for name, ENAMETOOLONG, passed over");
+  Check.Check(ReadAll("../build/test/files/dirlink", UnixFiles.NameLen, seen, others, tooLong)
+    & (seen = {0..3}),
+    "OpenDirectory: through a link");
+  Check.Check(~UnixFiles.OpenDirectory("../build/test/files/dirlink", {UnixFiles.noFollow}, d, err)
+    & (err.code # 0) & (d = NIL),
+    "OpenDirectory noFollow: a link fails");
+  Check.Check(~UnixFiles.OpenDirectory("../build/test/files/hello.txt", {}, d, err)
+    & (err.code = UnixErrors.ENOTDIR) & (d = NIL)
+    & (err.text = "opendir ../build/test/files/hello.txt: Not a directory"),
+    "OpenDirectory: a file, ENOTDIR");
+  Check.Check(~UnixFiles.OpenDirectory("../build/test/files/fifo", {}, d, err)
+    & (err.code = UnixErrors.ENOTDIR),
+    "OpenDirectory: a FIFO, ENOTDIR, without waiting for a writer");
+  Check.Check(~UnixFiles.OpenDirectory("../build/test/files/missing", {}, d, err)
+    & (err.code = UnixErrors.ENOENT),
+    "OpenDirectory: a directory that doesn't exist, ENOENT");
+  (* the lowest descriptor free is the one open takes *)
+  ok := UnixFiles.OpenRead("../build/test/files/hello.txt", {}, f, err);
+  UnixFiles.Close(f);
+  ok := ok & UnixFiles.OpenDirectory("../build/test/files/listing", {}, d, err)
+    & UnixFiles.OpenRead("../build/test/files/hello.txt", {}, fd, err) & (fd # f);
+  Check.Check(ok & ChildHas(0) & ~ChildHas(f), "OpenDirectory: close-on-exec, a child hasn't it");
+  UnixFiles.Close(fd);
+  UnixFiles.CloseDirectory(d);
+  ok := UnixFiles.OpenRead("../build/test/files/hello.txt", {}, fd, err) & (fd = f);
+  Check.Check(ok, "CloseDirectory: its descriptor closed");
+  UnixFiles.Close(fd);
+  Check.Check(UnixFiles.OpenDirectory("../build/test/files/listing/sub", {}, d, err)
+    & UnixFiles.NextName(d, name, err) & (name = ""),
+    "NextName: an empty directory, the end at once");
+  UnixFiles.CloseDirectory(d)
+END Directories;
 
 BEGIN
   ok := Shell("mkdir -p ../build/test/files/dir && printf 'hello\n' > ../build/test/files/hello.txt && ln -s hello.txt ../build/test/files/link && mkfifo ../build/test/files/fifo");
@@ -105,6 +182,8 @@ BEGIN
   UnixFiles.Close(fd);
 
   Check.Check(UnixFiles.Write(1, buf, 0, 0, n, err) & (n = 0), "Write: nothing");
+
+  Directories;
 
   Check.Summary
 END TestFiles.
