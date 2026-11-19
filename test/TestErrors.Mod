@@ -9,14 +9,14 @@ VAR
 
 (* Whether every errno value is positive and differs from the rest. *)
 PROCEDURE Distinct(): BOOLEAN;
-  VAR v: ARRAY 11 OF INTEGER; i, j: INTEGER;
+  VAR v: ARRAY 12 OF INTEGER; i, j: INTEGER;
 BEGIN
   v[0] := UnixErrors.ENOENT; v[1] := UnixErrors.ENOTDIR;
   v[2] := UnixErrors.ENAMETOOLONG; v[3] := UnixErrors.EACCES;
   v[4] := UnixErrors.ELOOP; v[5] := UnixErrors.EPERM;
   v[6] := UnixErrors.EAGAIN; v[7] := UnixErrors.EMFILE;
   v[8] := UnixErrors.ENFILE; v[9] := UnixErrors.EINVAL;
-  v[10] := UnixErrors.EEXIST;
+  v[10] := UnixErrors.EEXIST; v[11] := UnixErrors.ENOTTY;
   FOR i := 0 TO LEN(v) - 1 DO
     IF v[i] <= 0 THEN RETURN FALSE END;
     FOR j := 0 TO i - 1 DO IF v[i] = v[j] THEN RETURN FALSE END END

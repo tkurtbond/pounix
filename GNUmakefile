@@ -40,7 +40,7 @@ LIBDIR := $(BUILD)/lib
 
 LIBRARY := pounix
 # The library's modules, in import order (PLAN.md, "Modules").
-LIBMODS := UnixErrors UnixUsers UnixFiles UnixProcesses
+LIBMODS := UnixErrors UnixUsers UnixFiles UnixProcesses UnixTerminals
 
 # $(call variant-flags,<variant>) gives poc's flags for a variant: OC-g gives
 # -OC -g.
@@ -56,14 +56,14 @@ LIBPATH := -library-path $(LIBDIR)
 # The modules and their C parts, whichever have one.
 LIBSRC := $(LIBMODS:%=src/%.Mod) $(wildcard $(LIBMODS:%=src/%.c))
 # Test programs (test/<name>.Mod, each a main module), run by make test.
-TESTS := TestErrors TestUsers TestFiles TestProcesses
+TESTS := TestErrors TestUsers TestFiles TestProcesses TestTerminals
 # Programs make test can't run (test/<name>.Mod): RootUsers must run as
 # root (make test-root).
 ROOTTESTS := RootUsers
 # Programs that must halt (test/<name>.Mod), as name:Assert-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
-HALTTESTS := HaltFilesRange:110 HaltFilesFd:110 HaltFilesString:110 HaltFilesWait:110 HaltProcessesCommand:111 HaltProcessesWaited:112 HaltProcessesProcess:113 HaltFilesDirectory:114 HaltFilesMode:110
+HALTTESTS := HaltFilesRange:110 HaltFilesFd:110 HaltFilesString:110 HaltFilesWait:110 HaltProcessesCommand:111 HaltProcessesWaited:112 HaltProcessesProcess:113 HaltFilesDirectory:114 HaltFilesMode:110 HaltTerminalsFd:110
 ASSERTSTATUS := 10
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)

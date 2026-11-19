@@ -38,7 +38,12 @@ in `~/.local/lib/poc`, and pogemini uses it (its PLAN.md, "pounix").
 Phase 7: `UnixFiles.WaitReadable`, so the tests of polibtls and
 pogemini start their child processes through pounix. Phase 8: a
 directory's names (`OpenDirectory`, `NextName`, `CloseDirectory`), for
-pogemini's directory listings.
+pogemini's directory listings. Phase 9 (2026-11-18): a file written,
+renamed and removed (`OpenWrite`, `ModeOf`, `Sync`, `Rename`,
+`Remove`), for pogeminilib's known-hosts file. Phase 10 (2026-11-18,
+on Linux and the BSDs): `UnixTerminals` (`IsTerminal`,
+`Echo`, `SetEcho`, `OpenPseudo`), so pogeminilib's browser reads a
+secret without echoing it.
 
 **poc 0.14.0** (`/usr/bin/poc`). pounix needs nothing beyond poc's
 runtime and libc.

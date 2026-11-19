@@ -20,14 +20,16 @@ compiler, doesn't give:
   arguments as a list (no shell, so no quoting), its standard streams
   inherited, `/dev/null` or pipes, and a program that can't be run
   reported by its `errno`, not by an exit status of 127;
+- `UnixTerminals`: a terminal's echo turned off while a secret is
+  typed, and back on, and a pseudo-terminal for a test to type at;
 - `UnixErrors`: what went wrong, as the `errno` value and a text.
 
 It began with the C parts of pogemini, a Gemini server, so that later
 programs share them.
 
-**Status: early.** Phases 1 to 7 of [PLAN.md](PLAN.md) are done: all
-four modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked
-under valgrind on Linux, and `make install` checked by building the
+**Status: early.** Phases 1 to 10 of [PLAN.md](PLAN.md) are done: all
+five modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked under valgrind on
+Linux, and `make install` checked by building the
 example below outside the repo; pogemini uses it, and polibtls's
 tests. PLAN.md has the design and the
 roadmap; [AGENTS.md](AGENTS.md) has the working notes.

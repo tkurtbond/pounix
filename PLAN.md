@@ -84,6 +84,9 @@ with an `rtl` module (`Files`) and a reader sees where it comes from
 - **`UnixProcesses`** (`src/UnixProcesses.Mod`, `.c`): a `Command` (a
   program and its arguments, as a list, and what its standard streams
   are), `Start`, a `Process`, `Wait`, `Signal`, and the pipes to it.
+- **`UnixTerminals`** (`src/UnixTerminals.Mod`, `.c`): `IsTerminal`,
+  a terminal's `Echo` and `SetEcho`, and `OpenPseudo`, a
+  pseudo-terminal for tests (Phase 10).
 
 None imports `Tasks`: a call that waits (`Read` on a blocking
 descriptor, `Wait`) stops every task, as `rtl`'s own blocking calls
@@ -448,6 +451,33 @@ link, which isn't followed; `ENOENT` without `create`; `append`;
 another file and of a missing one; `Remove`, of a link not what it
 names, and of a missing name. [done on Linux 2026-11-18,
 valgrind-clean.]
+
+### Phase 10: a terminal's echo [done]
+
+pogeminilib's example browser asks for a secret when a server gives
+status 11, and must not echo it. rtl has no way to turn a terminal's
+echo off, and the browser ran `stty -echo` and `stty echo` through
+`UnixProcesses` (its PLAN.md, Phase 6), a process each time, so pounix
+gains `UnixTerminals` (the user, 2026-11-18): `IsTerminal` (`isatty`),
+`Echo` and `SetEcho` (`tcgetattr`, `tcsetattr` with `TCSANOW`, ECHO
+alone changed; the setting read back, since POSIX lets `tcsetattr`
+succeed having made only some changes), and `UnixErrors.ENOTTY` for a
+descriptor that isn't a terminal. A negative descriptor halts (110,
+halt test `HaltTerminalsFd`).
+
+`TCSANOW`, not `TCSAFLUSH` as `getpass` uses: what was typed before
+echo went off was echoed as it came, so discarding it hides nothing.
+
+A program killed while echo is off leaves the terminal so; that is
+the caller's to handle, as with `stty`.
+
+make's standard input is /dev/null, so a test needs a terminal of its
+own: `OpenPseudo` (`posix_openpt`, `grantpt`, `unlockpt`, `ptsname`,
+all POSIX; both sides close-on-exec, `O_NOCTTY`). `TestTerminals`
+checks that a new one echoes, what is typed reaches the terminal with
+echo off but doesn't come back, and with it on again does; `ENOTTY`
+for a file; a closed descriptor. [done on Linux 2026-11-18,
+valgrind-clean; FreeBSD, NetBSD and OpenBSD, amd64 and i386, `gmake test` passing.]
 
 ## Open questions
 
