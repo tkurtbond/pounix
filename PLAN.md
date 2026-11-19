@@ -479,6 +479,23 @@ echo off but doesn't come back, and with it on again does; `ENOTTY`
 for a file; a closed descriptor. [done on Linux 2026-11-18,
 valgrind-clean; FreeBSD, NetBSD and OpenBSD, amd64 and i386, `gmake test` passing.]
 
+### Phase 11: a file's mode changed [done]
+
+pogemini's `GemCert` makes its certificate directory with the
+runtime's `Directories.MakeDirectory`, mode 777 octal less the umask,
+where `umask 077` in the shell it ran before made it 700 (its PLAN.md,
+"Certificates through TlsMake"), so pounix gains `UnixFiles.ChangeMode`
+(the user, 2026-11-18): `chmod` on a path, retried on `EINTR`, the mode
+as `OpenWrite` and `ModeOf` take it, set whole, whatever the umask. It
+follows a symbolic link, as `chmod` does. A mode outside 0..7777 octal
+halts (110, halt test `HaltFilesChangeMode`).
+
+`TestFiles` checks a file set to 666 octal and a directory to 700 and
+then 777, more than a usual umask allows, each read back by `ModeOf`,
+and `ENOENT` for a missing name, with its text. [done on Linux
+2026-11-18, valgrind-clean; FreeBSD, NetBSD and OpenBSD, amd64 and
+i386, `gmake test` passing.]
+
 ## Open questions
 
 - Whether `UnixProcesses` should close every descriptor above 2 in the

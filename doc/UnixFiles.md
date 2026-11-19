@@ -89,6 +89,14 @@ PROCEDURE ModeOf*(fd: LONGINT; VAR mode: LONGINT; VAR err: UnixErrors.Error): BO
 
 The permission bits of the file open on fd, by fstat, as OpenWrite takes them (with set-user-ID 800H, set-group-ID 400H and sticky 200H).
 
+#### ChangeMode
+
+```oberon
+PROCEDURE ChangeMode*(path: ARRAY OF CHAR; mode: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Sets the permission bits of the file or directory path names to mode, as OpenWrite and ModeOf give them, by chmod, which follows a symbolic link and ignores the umask: such as a directory made for private files made only its owner's (700 octal, 1C0H). Halts for a mode outside 0..7777 octal (0FFFH).
+
 #### Sync
 
 ```oberon

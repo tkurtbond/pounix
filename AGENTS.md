@@ -43,7 +43,8 @@ renamed and removed (`OpenWrite`, `ModeOf`, `Sync`, `Rename`,
 `Remove`), for pogeminilib's known-hosts file. Phase 10 (2026-11-18,
 on Linux and the BSDs): `UnixTerminals` (`IsTerminal`,
 `Echo`, `SetEcho`, `OpenPseudo`), so pogeminilib's browser reads a
-secret without echoing it.
+secret without echoing it. Phase 11 (2026-11-18): `UnixFiles.ChangeMode`
+(`chmod`), so pogemini can keep its certificate directory its owner's.
 
 **poc 0.14.0** (`/usr/bin/poc`). pounix needs nothing beyond poc's
 runtime and libc.

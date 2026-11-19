@@ -130,7 +130,7 @@ BEGIN
   RETURN e.code = 0
 END Contents;
 
-(* OpenWrite, ModeOf, Sync, Rename, Remove *)
+(* OpenWrite, ModeOf, ChangeMode, Sync, Rename, Remove *)
 PROCEDURE Writing;
   VAR f, mode: LONGINT; text: ARRAY 64 OF CHAR;
 BEGIN
@@ -175,6 +175,25 @@ BEGIN
     & UnixFiles.ModeOf(f, mode, err) & (mode = 1C0H),
     "OpenWrite create: 700 octal");
   UnixFiles.Close(f);
+
+  (* ChangeMode ignores the umask: 666 and 777 octal are set whole *)
+  Check.Check(UnixFiles.ChangeMode("../build/test/files/w/c", 1B6H, err)
+    & UnixFiles.OpenRead("../build/test/files/w/c", {}, f, err) & UnixFiles.ModeOf(f, mode, err) & (mode = 1B6H),
+    "ChangeMode: a file, 666 octal");
+  UnixFiles.Close(f);
+  ok := Shell("mkdir ../build/test/files/w/sub && chmod 755 ../build/test/files/w/sub");
+  Check.Check(ok & UnixFiles.ChangeMode("../build/test/files/w/sub", 1C0H, err)
+    & UnixFiles.OpenRead("../build/test/files/w/sub", {}, f, err) & UnixFiles.ModeOf(f, mode, err) & (mode = 1C0H),
+    "ChangeMode: a directory, 700 octal");
+  UnixFiles.Close(f);
+  Check.Check(UnixFiles.ChangeMode("../build/test/files/w/sub", 1FFH, err)
+    & UnixFiles.OpenRead("../build/test/files/w/sub", {}, f, err) & UnixFiles.ModeOf(f, mode, err) & (mode = 1FFH),
+    "ChangeMode: 777 octal, whatever the umask");
+  UnixFiles.Close(f);
+  Check.Check(~UnixFiles.ChangeMode("../build/test/files/w/none", 180H, err) & (err.code = UnixErrors.ENOENT)
+    & (err.text = "chmod ../build/test/files/w/none: No such file or directory"),
+    "ChangeMode: no such file, ENOENT");
+  ok := Shell("rmdir ../build/test/files/w/sub");
 
   Check.Check(UnixFiles.Rename("../build/test/files/w/a", "../build/test/files/w/c", err) & Contents("../build/test/files/w/c", text) & (text = "z")
     & ~UnixFiles.OpenRead("../build/test/files/w/a", {}, f, err),

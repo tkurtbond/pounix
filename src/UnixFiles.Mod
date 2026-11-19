@@ -57,6 +57,8 @@ PROCEDURE ["C", "UnixFiles.-kind"] CKind(fd: SYSTEM.INT64;
   VAR kind: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-mode"] CMode(fd: SYSTEM.INT64;
   VAR mode: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-change-mode"] CChangeMode(path: ARRAY OF CHAR;
+  mode: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-sync"] CSync(fd: SYSTEM.INT64): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-rename"] CRename(from, to: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-remove"] CRemove(path: ARRAY OF CHAR): SYSTEM.INT32;
@@ -169,6 +171,18 @@ BEGIN
   m := 0; r := CMode(fd, m); mode := m;
   RETURN Outcome(r, "fstat", "", err)
 END ModeOf;
+
+(* Sets the permission bits of the file or directory path names to
+   mode, as OpenWrite and ModeOf give them, by chmod, which follows a
+   symbolic link and ignores the umask: such as a directory made for
+   private files made only its owner's (700 octal, 1C0H). Halts for a
+   mode outside 0..7777 octal (0FFFH). *)
+PROCEDURE ChangeMode*(path: ARRAY OF CHAR; mode: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+BEGIN
+  CheckString(path);
+  ASSERT((mode >= 0) & (mode <= 0FFFH), AssertArgument);
+  RETURN Outcome(CChangeMode(path, SYSTEM.VAL(SYSTEM.INT32, mode)), "chmod", path, err)
+END ChangeMode;
 
 (* Writes what the system holds of fd's file out to the disk (fsync),
    reporting a failure to write it that close would not: a file written

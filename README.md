@@ -27,7 +27,7 @@ compiler, doesn't give:
 It began with the C parts of pogemini, a Gemini server, so that later
 programs share them.
 
-**Status: early.** Phases 1 to 10 of [PLAN.md](PLAN.md) are done: all
+**Status: early.** Phases 1 to 11 of [PLAN.md](PLAN.md) are done: all
 five modules, tested on Linux, FreeBSD, NetBSD and OpenBSD, and checked under valgrind on
 Linux, and `make install` checked by building the
 example below outside the repo; pogemini uses it, and polibtls's

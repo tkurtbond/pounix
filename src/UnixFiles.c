@@ -1,6 +1,6 @@
 /* UnixFiles.c -- the C part of module UnixFiles (pounix): a path
    resolved, files by descriptor, and the names in a directory. POSIX
-   only (realpath, open, fstat, read, write, fsync, close, rename,
+   only (realpath, open, fstat, chmod, read, write, fsync, close, rename,
    unlink, poll, clock_gettime, fdopendir, readdir, closedir; strlcpy, POSIX since 2024, which
    OpenBSD's linker asks for over strcpy), the same on Linux and the
    BSDs. From pogemini's GemFiles.c.
@@ -36,6 +36,7 @@ int32_t unixfiles_open_read(const char *path, int32_t options, int64_t *fd) NAME
 int32_t unixfiles_open_write(const char *path, int32_t options, int32_t mode, int64_t *fd) NAME("open-write");
 int32_t unixfiles_kind(int64_t fd, int32_t *kind) NAME("kind");
 int32_t unixfiles_mode(int64_t fd, int32_t *mode) NAME("mode");
+int32_t unixfiles_change_mode(const char *path, int32_t mode) NAME("change-mode");
 int32_t unixfiles_sync(int64_t fd) NAME("sync");
 int32_t unixfiles_rename(const char *from, const char *to) NAME("rename");
 int32_t unixfiles_remove(const char *path) NAME("remove");
@@ -117,6 +118,18 @@ int32_t unixfiles_mode(int64_t fd, int32_t *mode)
 		return errno;
 	*mode = (int32_t)(st.st_mode & 07777);
 	return 0;
+}
+
+/* Sets the permission bits of the file path names, following a
+   symbolic link, by chmod. */
+int32_t unixfiles_change_mode(const char *path, int32_t mode)
+{
+	int r;
+
+	do
+		r = chmod(path, (mode_t)mode);
+	while (r != 0 && errno == EINTR);
+	return r != 0 ? errno : 0;
 }
 
 /* Writes what the system holds of fd's file out to the disk. */
