@@ -117,6 +117,81 @@ BEGIN
   UnixFiles.CloseDirectory(d)
 END Directories;
 
+(* Reads the file path whole into s (at most LEN(s) - 1 bytes): FALSE
+   if it can't be read. *)
+PROCEDURE Contents(path: ARRAY OF CHAR; VAR s: ARRAY OF CHAR): BOOLEAN;
+  VAR f, k, m: LONGINT; e: UnixErrors.Error;
+BEGIN
+  s[0] := 0X;
+  IF ~UnixFiles.OpenRead(path, {}, f, e) THEN RETURN FALSE END;
+  k := 0;
+  WHILE UnixFiles.Read(f, s, k, LEN(s) - 1 - k, m, e) & (m > 0) DO INC(k, m) END;
+  s[k] := 0X; UnixFiles.Close(f);
+  RETURN e.code = 0
+END Contents;
+
+(* OpenWrite, ModeOf, Sync, Rename, Remove *)
+PROCEDURE Writing;
+  VAR f, mode: LONGINT; text: ARRAY 64 OF CHAR;
+BEGIN
+  ok := Shell("mkdir -p ../build/test/files/w && ln -s ../hello.txt ../build/test/files/w/link");
+  Check.Check(ok, "make a directory to write in");
+
+  text := "one.";
+  Check.Check(UnixFiles.OpenWrite("../build/test/files/w/a", {UnixFiles.create, UnixFiles.exclusive}, 180H, f, err)
+    & (f >= 0) & UnixFiles.Write(f, text, 0, 4, n, err) & (n = 4)
+    & UnixFiles.Sync(f, err),
+    "OpenWrite create exclusive: a new file written and synced");
+  Check.Check(UnixFiles.ModeOf(f, mode, err) & (mode = 180H), "ModeOf: 600 octal, as asked");
+  Check.Check(ChildHas(0) & ~ChildHas(f), "OpenWrite: close-on-exec");
+  UnixFiles.Close(f);
+  Check.Check(Contents("../build/test/files/w/a", text) & (text = "one."), "OpenWrite: what was written is there");
+
+  Check.Check(~UnixFiles.OpenWrite("../build/test/files/w/a", {UnixFiles.create, UnixFiles.exclusive}, 180H, f, err)
+    & (f = -1) & (err.code = UnixErrors.EEXIST),
+    "OpenWrite create exclusive: an existing file, EEXIST");
+  Check.Check(~UnixFiles.OpenWrite("../build/test/files/w/link", {UnixFiles.create, UnixFiles.exclusive}, 180H, f, err)
+    & (err.code = UnixErrors.EEXIST) & Contents("../build/test/files/hello.txt", text)
+    & (text[0] = "h") & (text[5] = 0AX) & (text[6] = 0X),
+    "OpenWrite create exclusive: a link isn't followed, EEXIST");
+  Check.Check(~UnixFiles.OpenWrite("../build/test/files/w/b", {}, 180H, f, err) & (err.code = UnixErrors.ENOENT),
+    "OpenWrite: no file, not create, ENOENT");
+
+  text := "xy";
+  Check.Check(UnixFiles.OpenWrite("../build/test/files/w/a", {UnixFiles.append}, 0, f, err)
+    & UnixFiles.Write(f, text, 0, 2, n, err) & (n = 2),
+    "OpenWrite append");
+  UnixFiles.Close(f);
+  Check.Check(Contents("../build/test/files/w/a", text) & (text = "one.xy"), "OpenWrite append: at the end");
+  text := "z";
+  Check.Check(UnixFiles.OpenWrite("../build/test/files/w/a", {UnixFiles.truncate}, 0, f, err)
+    & UnixFiles.Write(f, text, 0, 1, n, err) & UnixFiles.ModeOf(f, mode, err) & (mode = 180H),
+    "OpenWrite truncate: the mode unchanged");
+  UnixFiles.Close(f);
+  Check.Check(Contents("../build/test/files/w/a", text) & (text = "z"), "OpenWrite truncate: emptied first");
+
+  (* 700 octal, which no usual umask takes from *)
+  Check.Check(UnixFiles.OpenWrite("../build/test/files/w/c", {UnixFiles.create}, 1C0H, f, err)
+    & UnixFiles.ModeOf(f, mode, err) & (mode = 1C0H),
+    "OpenWrite create: 700 octal");
+  UnixFiles.Close(f);
+
+  Check.Check(UnixFiles.Rename("../build/test/files/w/a", "../build/test/files/w/c", err) & Contents("../build/test/files/w/c", text) & (text = "z")
+    & ~UnixFiles.OpenRead("../build/test/files/w/a", {}, f, err),
+    "Rename: over another file");
+  Check.Check(~UnixFiles.Rename("../build/test/files/w/a", "../build/test/files/w/d", err) & (err.code = UnixErrors.ENOENT)
+    & (err.text = "rename ../build/test/files/w/a: No such file or directory"),
+    "Rename: no such file, ENOENT");
+  Check.Check(UnixFiles.Remove("../build/test/files/w/c", err) & ~UnixFiles.OpenRead("../build/test/files/w/c", {}, f, err),
+    "Remove");
+  Check.Check(~UnixFiles.Remove("../build/test/files/w/c", err) & (err.code = UnixErrors.ENOENT)
+    & (err.text = "unlink ../build/test/files/w/c: No such file or directory"),
+    "Remove: no such file, ENOENT");
+  Check.Check(UnixFiles.Remove("../build/test/files/w/link", err) & Contents("../build/test/files/hello.txt", text)
+    & (text[0] = "h") & (text[5] = 0AX) & (text[6] = 0X),
+    "Remove: a link, not what it names")
+END Writing;
+
 BEGIN
   ok := Shell("mkdir -p ../build/test/files/dir && printf 'hello\n' > ../build/test/files/hello.txt && ln -s hello.txt ../build/test/files/link && mkfifo ../build/test/files/fifo");
   Check.Check(ok, "make the files");
@@ -184,6 +259,7 @@ BEGIN
   Check.Check(UnixFiles.Write(1, buf, 0, 0, n, err) & (n = 0), "Write: nothing");
 
   Directories;
+  Writing;
 
   Check.Summary
 END TestFiles.

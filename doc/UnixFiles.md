@@ -2,7 +2,7 @@
 
 <!-- Made by doc/mkref.py from UnixFiles.Mod; edit the source, then make doc. -->
 
-What rtl's Files doesn't give: a path with its symbolic links resolved, and a file opened with the options a server needs, as a descriptor its caller reads, can wait on through Tasks, or hands to another library; and the names in a directory. A descriptor is a LONGINT, as in posockets and polibtls; whoever opened it closes it, and so with a Directory.
+What rtl's Files doesn't give: a path with its symbolic links resolved, and a file opened with the options a server needs, as a descriptor its caller reads, can wait on through Tasks, or hands to another library; a file written, renamed and removed with every failure reported, where Files halts (it stops a program that can't create or rename a file); and the names in a directory. A descriptor is a LONGINT, as in posockets and polibtls; whoever opened it closes it, and so with a Directory.
 
 Every descriptor UnixFiles opens is close-on-exec, so no child process inherits it (UnixProcesses, Platform.System).
 
@@ -19,6 +19,16 @@ noFollow* = 1;     (* O_NOFOLLOW: a symbolic link as the last name
 ```
 
 OpenRead's options
+
+```oberon
+create* = 2;       (* O_CREAT: made if it doesn't exist *)
+truncate* = 3;     (* O_TRUNC: emptied if it does *)
+exclusive* = 4;    (* O_EXCL: with create, EEXIST if it exists, even
+                      as a symbolic link, which isn't followed *)
+append* = 5;       (* O_APPEND: every write at the end *)
+```
+
+OpenWrite's too, besides those two
 
 ```oberon
 regular* = 1; directory* = 2; other* = 3;
@@ -62,6 +72,47 @@ PROCEDURE OpenRead*(path: ARRAY OF CHAR; options: SET; VAR fd: LONGINT;
 
 Opens path for reading, with options, a set of nonBlocking and noFollow: its descriptor in fd, or FALSE, with err, and fd -1.
 
+#### OpenWrite
+
+```oberon
+PROCEDURE OpenWrite*(path: ARRAY OF CHAR; options: SET; mode: LONGINT; VAR fd: LONGINT;
+    VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Opens path for writing, with options, a set of nonBlocking, noFollow, create, truncate, exclusive and append: its descriptor in fd, or FALSE, with err, and fd -1. A file created has mode, its permission bits as chmod's octal number gives them (600 octal is 180H, 644 is 1A4H), less the umask. Halts for a mode outside 0..7777 octal (0FFFH).
+
+#### ModeOf
+
+```oberon
+PROCEDURE ModeOf*(fd: LONGINT; VAR mode: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+The permission bits of the file open on fd, by fstat, as OpenWrite takes them (with set-user-ID 800H, set-group-ID 400H and sticky 200H).
+
+#### Sync
+
+```oberon
+PROCEDURE Sync*(fd: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Writes what the system holds of fd's file out to the disk (fsync), reporting a failure to write it that close would not: a file written to be renamed over another is synced first, so a crash leaves the old file or the whole new one.
+
+#### Rename
+
+```oberon
+PROCEDURE Rename*(from, to: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Renames from as to, replacing any file to names, in one step (both in one file system, else EXDEV).
+
+#### Remove
+
+```oberon
+PROCEDURE Remove*(path: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+```
+
+Removes the name path, not a directory's (unlink).
+
 #### KindOf
 
 ```oberon
@@ -103,7 +154,7 @@ Waits up to ms milliseconds for fd to have something to read: ready TRUE if it h
 PROCEDURE Close*(fd: LONGINT);
 ```
 
-Closes fd. Its result is ignored: nothing UnixFiles opens for writing (a pipe) can lose data in close. Halts for a negative fd.
+Closes fd. Its result is ignored: a file written is synced first (Sync), which reports what close could. Halts for a negative fd.
 
 #### OpenDirectory
 

@@ -3,7 +3,9 @@ MODULE UnixFiles; (* Paths resolved, files by descriptor, directories *)
 (* What rtl's Files doesn't give: a path with its symbolic links
    resolved, and a file opened with the options a server needs, as a
    descriptor its caller reads, can wait on through Tasks, or hands to
-   another library; and the names in a directory. A descriptor is a
+   another library; a file written, renamed and removed with every
+   failure reported, where Files halts (it stops a program that can't
+   create or rename a file); and the names in a directory. A descriptor is a
    LONGINT, as in posockets and polibtls; whoever opened it closes it,
    and so with a Directory.
 
@@ -21,6 +23,12 @@ CONST
   noFollow* = 1;     (* O_NOFOLLOW: a symbolic link as the last name
                         fails (ELOOP on Linux and FreeBSD, EMLINK on
                         NetBSD, EMLINK or ELOOP on OpenBSD) *)
+  (* OpenWrite's too, besides those two *)
+  create* = 2;       (* O_CREAT: made if it doesn't exist *)
+  truncate* = 3;     (* O_TRUNC: emptied if it does *)
+  exclusive* = 4;    (* O_EXCL: with create, EEXIST if it exists, even
+                        as a symbolic link, which isn't followed *)
+  append* = 5;       (* O_APPEND: every write at the end *)
 
   (* KindOf's kinds *)
   regular* = 1; directory* = 2; other* = 3;
@@ -43,8 +51,15 @@ PROCEDURE ["C", "UnixFiles.-resolve"] CResolve(path: ARRAY OF CHAR;
   VAR out: ARRAY OF CHAR; max: SYSTEM.INT64): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-open-read"] COpenRead(path: ARRAY OF CHAR;
   options: SYSTEM.INT32; VAR fd: SYSTEM.INT64): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-open-write"] COpenWrite(path: ARRAY OF CHAR;
+  options, mode: SYSTEM.INT32; VAR fd: SYSTEM.INT64): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-kind"] CKind(fd: SYSTEM.INT64;
   VAR kind: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-mode"] CMode(fd: SYSTEM.INT64;
+  VAR mode: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-sync"] CSync(fd: SYSTEM.INT64): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-rename"] CRename(from, to: ARRAY OF CHAR): SYSTEM.INT32;
+PROCEDURE ["C", "UnixFiles.-remove"] CRemove(path: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-read"] CRead(fd: SYSTEM.INT64; VAR buf: ARRAY OF CHAR;
   pos, len: SYSTEM.INT64; VAR n: SYSTEM.INT64): SYSTEM.INT32;
 PROCEDURE ["C", "UnixFiles.-write"] CWrite(fd: SYSTEM.INT64; VAR buf: ARRAY OF CHAR;
@@ -120,6 +135,66 @@ BEGIN
   RETURN Outcome(r, "open", path, err)
 END OpenRead;
 
+(* Opens path for writing, with options, a set of nonBlocking,
+   noFollow, create, truncate, exclusive and append: its descriptor in
+   fd, or FALSE, with err, and fd -1. A file created has mode, its
+   permission bits as chmod's octal number gives them (600 octal is
+   180H, 644 is 1A4H), less the umask. Halts for a mode outside 0..7777
+   octal (0FFFH). *)
+PROCEDURE OpenWrite*(path: ARRAY OF CHAR; options: SET; mode: LONGINT; VAR fd: LONGINT;
+    VAR err: UnixErrors.Error): BOOLEAN;
+  VAR r, o: SYSTEM.INT32; d: SYSTEM.INT64;
+BEGIN
+  CheckString(path);
+  ASSERT((mode >= 0) & (mode <= 0FFFH), AssertArgument);
+  o := 0;
+  IF nonBlocking IN options THEN o := o + 1 END;
+  IF noFollow IN options THEN o := o + 2 END;
+  IF create IN options THEN o := o + 4 END;
+  IF truncate IN options THEN o := o + 8 END;
+  IF exclusive IN options THEN o := o + 16 END;
+  IF append IN options THEN o := o + 32 END;
+  d := -1; r := COpenWrite(path, o, SYSTEM.VAL(SYSTEM.INT32, mode), d);
+  fd := SYSTEM.VAL(LONGINT, d);
+  RETURN Outcome(r, "open", path, err)
+END OpenWrite;
+
+(* The permission bits of the file open on fd, by fstat, as OpenWrite
+   takes them (with set-user-ID 800H, set-group-ID 400H and sticky
+   200H). *)
+PROCEDURE ModeOf*(fd: LONGINT; VAR mode: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+  VAR r, m: SYSTEM.INT32;
+BEGIN
+  ASSERT(fd >= 0, AssertArgument);
+  m := 0; r := CMode(fd, m); mode := m;
+  RETURN Outcome(r, "fstat", "", err)
+END ModeOf;
+
+(* Writes what the system holds of fd's file out to the disk (fsync),
+   reporting a failure to write it that close would not: a file written
+   to be renamed over another is synced first, so a crash leaves the
+   old file or the whole new one. *)
+PROCEDURE Sync*(fd: LONGINT; VAR err: UnixErrors.Error): BOOLEAN;
+BEGIN
+  ASSERT(fd >= 0, AssertArgument);
+  RETURN Outcome(CSync(fd), "fsync", "", err)
+END Sync;
+
+(* Renames from as to, replacing any file to names, in one step (both
+   in one file system, else EXDEV). *)
+PROCEDURE Rename*(from, to: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+BEGIN
+  CheckString(from); CheckString(to);
+  RETURN Outcome(CRename(from, to), "rename", from, err)
+END Rename;
+
+(* Removes the name path, not a directory's (unlink). *)
+PROCEDURE Remove*(path: ARRAY OF CHAR; VAR err: UnixErrors.Error): BOOLEAN;
+BEGIN
+  CheckString(path);
+  RETURN Outcome(CRemove(path), "unlink", path, err)
+END Remove;
+
 (* The kind of file open on fd, by fstat: regular, directory, or other
    (a FIFO, a device, a socket). *)
 PROCEDURE KindOf*(fd: LONGINT; VAR kind: INTEGER; VAR err: UnixErrors.Error): BOOLEAN;
@@ -176,8 +251,8 @@ BEGIN
   RETURN Outcome(r, "poll", "", err)
 END WaitReadable;
 
-(* Closes fd. Its result is ignored: nothing UnixFiles opens for writing
-   (a pipe) can lose data in close. Halts for a negative fd. *)
+(* Closes fd. Its result is ignored: a file written is synced first
+   (Sync), which reports what close could. Halts for a negative fd. *)
 PROCEDURE Close*(fd: LONGINT);
 BEGIN
   ASSERT(fd >= 0, AssertArgument);

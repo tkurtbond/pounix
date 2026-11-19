@@ -144,9 +144,13 @@ one of those, as "no such user" (to confirm on each system, Phase 2).
   short is `ENAMETOOLONG`.
 - `OpenRead(path, options, VAR fd, VAR err): BOOLEAN`: opens for
   reading, always close-on-exec; `options` a `SET` of `nonBlocking`
-  and `noFollow`. A mode for writing, with `create`, `truncate`,
-  `append`, `exclusive`, comes with a user that needs it, as
-  `OpenWrite`.
+  and `noFollow`.
+- `OpenWrite(path, options, mode, VAR fd, VAR err): BOOLEAN` (Phase
+  9): opens for writing, close-on-exec, `options` adding `create`,
+  `truncate`, `exclusive` and `append`, a file created having `mode`
+  less the umask. `ModeOf(fd, VAR mode, VAR err)`: `fstat`'s
+  permission bits. `Sync(fd, VAR err)`: `fsync`. `Rename(from, to,
+  VAR err)`, `Remove(path, VAR err)`: `rename`, `unlink`.
 - `KindOf(fd, VAR kind, VAR err): BOOLEAN`: `fstat`'s file type as
   `regular`, `directory` or `other`.
 - `Read(fd, VAR buf, pos, len, VAR n, VAR err): BOOLEAN`: up to `len`
@@ -160,8 +164,8 @@ one of those, as "no such user" (to confirm on each system, Phase 2).
   in the system's order, never `.` or `..`, hidden ones included;
   `name` `""` at the end. A `Directory` hides its `DIR`; whoever opens
   one closes it, as with a descriptor, and closing twice does nothing.
-- `Close(fd)`: closes, ignoring the result, since nothing pounix opens
-  for writing can lose data in `close` (a pipe); `EINTR` isn't retried
+- `Close(fd)`: closes, ignoring the result, since a file written is
+  synced first (`Sync`), which reports a write that failed; `EINTR` isn't retried
   (the descriptor is gone on Linux and the BSDs either way).
 
 Descriptors are `LONGINT`; a negative one, or `pos` and `len` outside
@@ -423,6 +427,27 @@ leaves the buffer empty as before: in POSIX since 2024, in glibc
 since 2.38 (declared without `-std=c99`; 2.43 here), and long in the
 BSDs. `make test` and `make valgrind` passed on Linux and `gmake test`
 on the five BSD hosts, with no warning (2026-11-17).
+
+### Phase 9: a file written, renamed and removed [done]
+
+pogeminilib keeps a known-hosts file (its PLAN.md, "Trust"), written
+under a temporary name and renamed over the old one, and outside data
+must never halt it. poc's `Files` halts (99) when it can't create the
+temporary file or rename it (`Files.Fail`, read 2026-11-18), as for a
+directory the program can't write in, so pounix gains what the plan
+above held back until a user needed it: `OpenWrite` with `create`,
+`truncate`, `exclusive` and `append` (`O_CREAT`, `O_TRUNC`, `O_EXCL`,
+`O_APPEND`) and a mode, `ModeOf`, `Sync`, `Rename` and `Remove`, and
+`UnixErrors.EEXIST`. A mode outside 0..7777 octal halts (110, halt
+test `HaltFilesMode`).
+
+`TestFiles` checks a file made `exclusive` with mode 600 octal, written,
+synced and read back; `EEXIST` for an existing file and for a symbolic
+link, which isn't followed; `ENOENT` without `create`; `append`;
+`truncate` keeping the mode; 700 octal; close-on-exec; `Rename` over
+another file and of a missing one; `Remove`, of a link not what it
+names, and of a missing name. [done on Linux 2026-11-18,
+valgrind-clean.]
 
 ## Open questions
 

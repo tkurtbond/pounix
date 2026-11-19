@@ -33,7 +33,7 @@ int32_t errno_value(int32_t which)
 {
 	static const int32_t values[] = {
 		ENOENT, ENOTDIR, ENAMETOOLONG, EACCES, ELOOP, EPERM,
-		EAGAIN, EMFILE, ENFILE, EINVAL
+		EAGAIN, EMFILE, ENFILE, EINVAL, EEXIST
 	};
 
 	if (which < 0 || which >= (int32_t)(sizeof values / sizeof values[0]))

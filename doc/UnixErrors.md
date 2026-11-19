@@ -27,7 +27,7 @@ What went wrong: code, the errno value or 0, and text.
 
 ```oberon
 ENOENT-, ENOTDIR-, ENAMETOOLONG-, EACCES-, ELOOP-, EPERM-,
-EAGAIN-, EMFILE-, ENFILE-, EINVAL-: INTEGER;
+EAGAIN-, EMFILE-, ENFILE-, EINVAL-, EEXIST-: INTEGER;
 ```
 
 errno values a caller may act on, as Error.code. Their numbers differ between systems, so they come from the C part.

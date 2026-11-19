@@ -1,7 +1,7 @@
 /* UnixFiles.c -- the C part of module UnixFiles (pounix): a path
    resolved, files by descriptor, and the names in a directory. POSIX
-   only (realpath, open, fstat, read, write, close, poll, clock_gettime,
-   fdopendir, readdir, closedir; strlcpy, POSIX since 2024, which
+   only (realpath, open, fstat, read, write, fsync, close, rename,
+   unlink, poll, clock_gettime, fdopendir, readdir, closedir; strlcpy, POSIX since 2024, which
    OpenBSD's linker asks for over strcpy), the same on Linux and the
    BSDs. From pogemini's GemFiles.c.
 
@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <poll.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -26,12 +27,18 @@
 typedef int64_t length;
 
 /* UnixFiles.Mod's options, as bits, and kinds */
-enum { OPT_NONBLOCKING = 1, OPT_NOFOLLOW = 2 };
+enum { OPT_NONBLOCKING = 1, OPT_NOFOLLOW = 2, OPT_CREATE = 4, OPT_TRUNCATE = 8,
+	OPT_EXCLUSIVE = 16, OPT_APPEND = 32 };
 enum { KIND_REGULAR = 1, KIND_DIRECTORY = 2, KIND_OTHER = 3 };
 
 int32_t unixfiles_resolve(const char *path, char *out, length max) NAME("resolve");
 int32_t unixfiles_open_read(const char *path, int32_t options, int64_t *fd) NAME("open-read");
+int32_t unixfiles_open_write(const char *path, int32_t options, int32_t mode, int64_t *fd) NAME("open-write");
 int32_t unixfiles_kind(int64_t fd, int32_t *kind) NAME("kind");
+int32_t unixfiles_mode(int64_t fd, int32_t *mode) NAME("mode");
+int32_t unixfiles_sync(int64_t fd) NAME("sync");
+int32_t unixfiles_rename(const char *from, const char *to) NAME("rename");
+int32_t unixfiles_remove(const char *path) NAME("remove");
 int32_t unixfiles_read(int64_t fd, char *buf, length pos, length len, int64_t *n) NAME("read");
 int32_t unixfiles_write(int64_t fd, const char *buf, length pos, length len, int64_t *n) NAME("write");
 int32_t unixfiles_wait_readable(int64_t fd, int32_t ms, int32_t *ready) NAME("wait-readable");
@@ -71,6 +78,68 @@ int32_t unixfiles_open_read(const char *path, int32_t options, int64_t *fd)
 		return errno;
 	*fd = d;
 	return 0;
+}
+
+/* Opens path for writing, close-on-exec, its descriptor in *fd; a file
+   created has mode, less the umask. */
+int32_t unixfiles_open_write(const char *path, int32_t options, int32_t mode, int64_t *fd)
+{
+	int flags = O_WRONLY | O_CLOEXEC, d;
+
+	if (options & OPT_NONBLOCKING)
+		flags |= O_NONBLOCK;
+	if (options & OPT_NOFOLLOW)
+		flags |= O_NOFOLLOW;
+	if (options & OPT_CREATE)
+		flags |= O_CREAT;
+	if (options & OPT_TRUNCATE)
+		flags |= O_TRUNC;
+	if (options & OPT_EXCLUSIVE)
+		flags |= O_EXCL;
+	if (options & OPT_APPEND)
+		flags |= O_APPEND;
+	do
+		d = open(path, flags, (mode_t)mode);
+	while (d < 0 && errno == EINTR);
+	if (d < 0)
+		return errno;
+	*fd = d;
+	return 0;
+}
+
+/* The permission bits of the file open on fd (and set-user-ID,
+   set-group-ID and sticky), by fstat. */
+int32_t unixfiles_mode(int64_t fd, int32_t *mode)
+{
+	struct stat st;
+
+	if (fstat((int)fd, &st) != 0)
+		return errno;
+	*mode = (int32_t)(st.st_mode & 07777);
+	return 0;
+}
+
+/* Writes what the system holds of fd's file out to the disk. */
+int32_t unixfiles_sync(int64_t fd)
+{
+	int r;
+
+	do
+		r = fsync((int)fd);
+	while (r != 0 && errno == EINTR);
+	return r != 0 ? errno : 0;
+}
+
+/* Renames from as to, replacing what to names, in one step. */
+int32_t unixfiles_rename(const char *from, const char *to)
+{
+	return rename(from, to) != 0 ? errno : 0;
+}
+
+/* Removes the name path (not a directory). */
+int32_t unixfiles_remove(const char *path)
+{
+	return unlink(path) != 0 ? errno : 0;
 }
 
 /* The kind of file open on fd, by fstat. */

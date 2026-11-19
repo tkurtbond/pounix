@@ -26,7 +26,7 @@ VAR
   (* errno values a caller may act on, as Error.code. Their numbers
      differ between systems, so they come from the C part. *)
   ENOENT-, ENOTDIR-, ENAMETOOLONG-, EACCES-, ELOOP-, EPERM-,
-  EAGAIN-, EMFILE-, ENFILE-, EINVAL-: INTEGER;
+  EAGAIN-, EMFILE-, ENFILE-, EINVAL-, EEXIST-: INTEGER;
 
 PROCEDURE ["C", "UnixErrors.-errno-value"] CErrnoValue(which: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "UnixErrors.-error-text"] CErrorText(code: SYSTEM.INT32;
@@ -69,5 +69,5 @@ BEGIN
   ENOENT := Value(0); ENOTDIR := Value(1); ENAMETOOLONG := Value(2);
   EACCES := Value(3); ELOOP := Value(4); EPERM := Value(5);
   EAGAIN := Value(6); EMFILE := Value(7); ENFILE := Value(8);
-  EINVAL := Value(9)
+  EINVAL := Value(9); EEXIST := Value(10)
 END UnixErrors.

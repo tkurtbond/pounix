@@ -12,8 +12,10 @@ compiler, doesn't give:
   opened as a descriptor, non-blocking or refusing a link, for a
   program that waits on it through `Tasks` or hands it to another
   library, and, for a program without tasks, a wait with a time limit
-  for a descriptor to have something to read; and the names in a
-  directory;
+  for a descriptor to have something to read; a file written,
+  synced, renamed and removed with every failure reported (poc's
+  `Files` halts when it can't create or rename one); and the names in
+  a directory;
 - `UnixProcesses`: a program run as a child process with its
   arguments as a list (no shell, so no quoting), its standard streams
   inherited, `/dev/null` or pipes, and a program that can't be run
